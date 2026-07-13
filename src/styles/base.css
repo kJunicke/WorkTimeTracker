@@ -1,0 +1,173 @@
+@import './tokens.css';
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+}
+
+body {
+  font-family: var(--font);
+  color: var(--text);
+  background: var(--bg);
+  line-height: 1.45;
+  -webkit-font-smoothing: antialiased;
+  min-height: 100dvh;
+  overscroll-behavior-y: none;
+}
+
+button {
+  font-family: inherit;
+}
+
+/* Tap targets shouldn't show the tap flash on mobile */
+* {
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Respect reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
+/* ---- Shared primitives (screens may add scoped styles on top) ---- */
+
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  padding: 16px;
+}
+
+.muted {
+  color: var(--text-muted);
+}
+.faint {
+  color: var(--text-faint);
+}
+.mono {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.hstack {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.vstack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.spacer {
+  flex: 1;
+}
+
+/* Buttons */
+.btn {
+  appearance: none;
+  border: 1px solid var(--border-strong);
+  background: var(--surface);
+  color: var(--text);
+  border-radius: var(--radius);
+  padding: 12px 16px;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.06s var(--ease), background 0.15s var(--ease), border-color 0.15s var(--ease);
+  min-height: 44px;
+}
+.btn:active {
+  transform: scale(0.98);
+}
+.btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+.btn-primary:active {
+  background: var(--accent-press);
+}
+.btn-ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--accent-strong);
+}
+.btn-danger {
+  color: var(--under);
+  border-color: var(--under-weak);
+  background: var(--under-weak);
+}
+.btn-block {
+  width: 100%;
+}
+
+/* Badge / pill */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12.5px;
+  font-weight: 600;
+  padding: 4px 9px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  color: var(--text-muted);
+}
+
+/* Form controls */
+input,
+select,
+textarea {
+  font-family: inherit;
+  font-size: 16px; /* >=16px avoids iOS zoom-on-focus */
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  width: 100%;
+}
+input:focus,
+select:focus,
+textarea:focus {
+  outline: 2px solid var(--accent-weak-2);
+  border-color: var(--accent);
+}
+
+label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+h1,
+h2,
+h3 {
+  margin: 0;
+  line-height: 1.2;
+}
+
+a {
+  color: var(--accent-strong);
+}

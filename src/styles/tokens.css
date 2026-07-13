@@ -1,0 +1,68 @@
+/* Design tokens — light, clean, high-contrast. Accent: indigo/violet.
+   Balance semantics use green (over) / red (under) and MUST stay visually
+   distinct from the accent. */
+:root {
+  /* Accent (indigo/violet) */
+  --accent: #6366f1;
+  --accent-strong: #4f46e5;
+  --accent-press: #4338ca;
+  --accent-weak: #eef2ff;
+  --accent-weak-2: #e0e7ff;
+  --on-accent: #ffffff;
+
+  /* Balance semantics */
+  --over: #16a34a; /* green — overtime */
+  --over-weak: #dcfce7;
+  --under: #dc2626; /* red — undertime */
+  --under-weak: #fee2e2;
+  --neutral-bal: #6b6b78;
+
+  /* Neutrals / surfaces */
+  --bg: #f6f6f9;
+  --surface: #ffffff;
+  --surface-2: #f1f2f6;
+  --surface-3: #e9eaf1;
+  --border: #e4e4ec;
+  --border-strong: #d3d4de;
+
+  /* Text */
+  --text: #17171f;
+  --text-muted: #64646f;
+  --text-faint: #9a9aa6;
+
+  /* Day-type accents (distinct from accent + balance colors) */
+  --work: #6366f1;
+  --vacation: #0ea5e9; /* Urlaub — sky */
+  --sick: #f59e0b; /* Krank — amber */
+  --holiday: #a855f7; /* Feiertag — purple */
+  --weekend: #b9bac6; /* weekend — grey */
+
+  /* Heatmap ramp (net work vs. target): empty → under → on → over */
+  --heat-empty: #f1f2f6;
+  --heat-under: #fde3d6;
+  --heat-on: #c7d2fe;
+  --heat-over: #a7f3d0;
+
+  /* Radii */
+  --radius-sm: 10px;
+  --radius: 14px;
+  --radius-lg: 20px;
+  --radius-pill: 999px;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 2px rgba(20, 20, 45, 0.06);
+  --shadow: 0 1px 3px rgba(20, 20, 45, 0.06), 0 8px 24px rgba(20, 20, 45, 0.05);
+  --shadow-lg: 0 10px 34px rgba(20, 20, 45, 0.13);
+
+  /* Layout */
+  --app-max-width: 560px;
+  --nav-height: 66px;
+  --appbar-height: 56px;
+
+  /* Type */
+  --font: system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', 'JetBrains Mono', 'Roboto Mono', Menlo, monospace;
+
+  /* Motion */
+  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+}
