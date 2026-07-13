@@ -12,6 +12,8 @@ import {
   putSettings,
   wipeAll,
   bulkImport,
+  replaceAllData,
+  mergeImport,
 } from './repo'
 import { getDb, SETTINGS_KEY } from './db'
 import { dayKeyFromMs } from '@/domain/time'
@@ -182,5 +184,69 @@ describe('wipeAll', () => {
     expect(await getAllDayMeta()).toEqual([])
     const db = await getDb()
     expect(await db.get('settings', SETTINGS_KEY)).toBeUndefined()
+  })
+})
+
+describe('replaceAllData (backup "Ersetzen")', () => {
+  const importSettings: Settings = {
+    dailyTargetSeconds: 21300,
+    balanceStartDate: '2026-05-06',
+    schemaVersion: SCHEMA_VERSION,
+    createdAt: 123,
+    onboarded: true,
+  }
+
+  it('atomically replaces sessions AND day labels (regression: labels must not be dropped)', async () => {
+    // Pre-existing data that must be fully replaced.
+    await putSession(mkSession({ id: 'old' }))
+    await putDayMeta({ date: '2026-01-01', type: 'holiday', note: 'old' })
+
+    await replaceAllData({
+      settings: importSettings,
+      sessions: [mkSession({ id: 'new-1' }), mkSession({ id: 'new-2' })],
+      dayMeta: [
+        { date: '2026-05-14', type: 'holiday', note: '' },
+        { date: '2026-05-26', type: 'vacation', note: '' },
+      ],
+    })
+
+    const sessions = await getAllSessions()
+    const dayMeta = await getAllDayMeta()
+    expect(sessions.map((s) => s.id).sort()).toEqual(['new-1', 'new-2'])
+    // The whole point of the fix: labels persist alongside sessions.
+    expect(dayMeta).toEqual([
+      { date: '2026-05-14', type: 'holiday', note: '' },
+      { date: '2026-05-26', type: 'vacation', note: '' },
+    ])
+    expect((await getSettings()).dailyTargetSeconds).toBe(21300)
+  })
+
+  it('persists a realistic 90-session + 8-label batch (both stores in full)', async () => {
+    const sessions = Array.from({ length: 90 }, (_, i) => mkSession({ id: `s-${i}` }))
+    const dayMeta: DayMeta[] = Array.from({ length: 8 }, (_, i) => ({
+      date: `2026-05-${String(i + 10).padStart(2, '0')}`,
+      type: 'vacation',
+      note: '',
+    }))
+    await replaceAllData({ settings: importSettings, sessions, dayMeta })
+    expect((await getAllSessions()).length).toBe(90)
+    expect((await getAllDayMeta()).length).toBe(8)
+  })
+})
+
+describe('mergeImport (backup "Zusammenführen")', () => {
+  it('upserts sessions + labels without touching settings', async () => {
+    await putSession(mkSession({ id: 'keep' }))
+    await putDayMeta({ date: '2026-02-02', type: 'sick', note: 'keep' })
+
+    await mergeImport({
+      sessions: [mkSession({ id: 'add' })],
+      dayMeta: [{ date: '2026-05-14', type: 'holiday', note: '' }],
+    })
+
+    expect((await getAllSessions()).map((s) => s.id).sort()).toEqual(['add', 'keep'])
+    const dayMeta = await getAllDayMeta()
+    expect(dayMeta).toHaveLength(2)
+    expect(dayMeta).toContainEqual({ date: '2026-05-14', type: 'holiday', note: '' })
   })
 })

@@ -106,3 +106,51 @@ export async function bulkImport(data: {
     await putSettings({ ...current, ...data.settings })
   }
 }
+
+/**
+ * Backup "Ersetzen": atomically clears every store and writes the new settings
+ * + sessions + day labels in ONE transaction. Doing clear + all writes in a
+ * single transaction is deliberate:
+ *  - **All-or-nothing:** if any write fails the whole transaction aborts and
+ *    the *existing* data is left intact — never a half-wiped DB (the old
+ *    wipe-then-load could leave the database empty on a mid-import failure).
+ *  - **Mobile-safe:** one transaction instead of ~N concurrent auto-commit
+ *    `put`s avoids the mobile-Safari/IndexedDB flakiness that was silently
+ *    dropping the day-label records while the sessions went through.
+ */
+export async function replaceAllData(data: {
+  settings: Settings
+  sessions: Session[]
+  dayMeta: DayMeta[]
+}): Promise<void> {
+  const db = await getDb()
+  const tx = db.transaction(['sessions', 'dayMeta', 'settings'], 'readwrite')
+  const sessionStore = tx.objectStore('sessions')
+  const dayMetaStore = tx.objectStore('dayMeta')
+  const settingsStore = tx.objectStore('settings')
+  sessionStore.clear()
+  dayMetaStore.clear()
+  settingsStore.clear()
+  for (const s of data.sessions) sessionStore.put(toStoredSession(s))
+  for (const m of data.dayMeta) dayMetaStore.put(m)
+  settingsStore.put(data.settings, SETTINGS_KEY)
+  await tx.done
+}
+
+/**
+ * Backup "Zusammenführen": upserts sessions (by id) + day labels (by date) in
+ * ONE transaction, overwriting on collision. Atomic + mobile-safe for the same
+ * reasons as `replaceAllData`; `settings` are left untouched.
+ */
+export async function mergeImport(data: {
+  sessions: Session[]
+  dayMeta: DayMeta[]
+}): Promise<void> {
+  const db = await getDb()
+  const tx = db.transaction(['sessions', 'dayMeta'], 'readwrite')
+  const sessionStore = tx.objectStore('sessions')
+  const dayMetaStore = tx.objectStore('dayMeta')
+  for (const s of data.sessions) sessionStore.put(toStoredSession(s))
+  for (const m of data.dayMeta) dayMetaStore.put(m)
+  await tx.done
+}

@@ -431,7 +431,6 @@ function exportBackup(): BackupFile {
  */
 async function importBackup(data: BackupData, mode: 'replace' | 'merge'): Promise<void> {
   if (mode === 'replace') {
-    await repo.wipeAll()
     const restoredSettings: Settings = {
       dailyTargetSeconds: data.settings.dailyTargetSeconds,
       balanceStartDate: data.settings.balanceStartDate,
@@ -439,8 +438,15 @@ async function importBackup(data: BackupData, mode: 'replace' | 'merge'): Promis
       createdAt: Date.now(),
       onboarded: true,
     }
-    await repo.putSettings(restoredSettings)
-    await repo.bulkImport({ sessions: data.sessions, dayMeta: data.dayMeta })
+    // One atomic transaction (see repo.replaceAllData): the in-memory refs are
+    // updated ONLY after it resolves, so a failed/aborted write throws to the
+    // caller (SettingsView surfaces it) and never leaves the UI showing data
+    // that didn't actually persist.
+    await repo.replaceAllData({
+      settings: restoredSettings,
+      sessions: data.sessions,
+      dayMeta: data.dayMeta,
+    })
     settings.value = restoredSettings
     sessions.value = [...data.sessions]
     dayMeta.value = [...data.dayMeta]
@@ -452,7 +458,7 @@ async function importBackup(data: BackupData, mode: 'replace' | 'merge'): Promis
   const dayMetaMap = new Map<string, DayMeta>(dayMeta.value.map((m) => [m.date, m]))
   for (const m of data.dayMeta) dayMetaMap.set(m.date, m)
 
-  await repo.bulkImport({ sessions: data.sessions, dayMeta: data.dayMeta })
+  await repo.mergeImport({ sessions: data.sessions, dayMeta: data.dayMeta })
   await markOnboarded()
 
   sessions.value = [...sessionMap.values()]

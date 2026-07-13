@@ -86,6 +86,7 @@ const importError = ref<string | null>(null)
 const pendingImport = ref<BackupData | null>(null)
 const confirmingReplace = ref(false)
 const importDoneMessage = ref<string | null>(null)
+const importBusy = ref(false)
 
 async function onFileSelected(event: Event): Promise<void> {
   const input = event.target as HTMLInputElement
@@ -120,21 +121,42 @@ function onCancelPendingImport(): void {
   confirmingReplace.value = false
 }
 
+/** Human-readable "N Sitzung(en) und M Tageskennzeichnung(en)" for the confirmation. */
+function importCounts(data: BackupData): string {
+  return `${data.sessions.length} Sitzung(en) und ${data.dayMeta.length} Tageskennzeichnung(en)`
+}
+
 async function onConfirmReplace(): Promise<void> {
   const data = pendingImport.value
-  if (!data) return
-  await importBackup(data, 'replace')
-  pendingImport.value = null
-  confirmingReplace.value = false
-  importDoneMessage.value = 'Backup wurde eingespielt: alle vorherigen Daten wurden ersetzt.'
+  if (!data || importBusy.value) return
+  importBusy.value = true
+  importError.value = null
+  try {
+    await importBackup(data, 'replace')
+    importDoneMessage.value = `Backup eingespielt: ${importCounts(data)} ersetzt.`
+    pendingImport.value = null
+    confirmingReplace.value = false
+  } catch (err) {
+    importError.value = `Import fehlgeschlagen: ${err instanceof Error ? err.message : String(err)}`
+  } finally {
+    importBusy.value = false
+  }
 }
 
 async function onMerge(): Promise<void> {
   const data = pendingImport.value
-  if (!data) return
-  await importBackup(data, 'merge')
-  pendingImport.value = null
-  importDoneMessage.value = 'Backup wurde zusammengeführt.'
+  if (!data || importBusy.value) return
+  importBusy.value = true
+  importError.value = null
+  try {
+    await importBackup(data, 'merge')
+    importDoneMessage.value = `Backup zusammengeführt: ${importCounts(data)}.`
+    pendingImport.value = null
+  } catch (err) {
+    importError.value = `Import fehlgeschlagen: ${err instanceof Error ? err.message : String(err)}`
+  } finally {
+    importBusy.value = false
+  }
 }
 </script>
 
@@ -206,10 +228,19 @@ async function onMerge(): Promise<void> {
 
         <template v-if="!confirmingReplace">
           <div class="action-row">
-            <button class="btn btn-primary" type="button" @click="onChooseReplace">Ersetzen</button>
-            <button class="btn" type="button" @click="onMerge">Zusammenführen</button>
+            <button class="btn btn-primary" type="button" :disabled="importBusy" @click="onChooseReplace">
+              Ersetzen
+            </button>
+            <button class="btn" type="button" :disabled="importBusy" @click="onMerge">
+              {{ importBusy ? 'Importiere…' : 'Zusammenführen' }}
+            </button>
           </div>
-          <button class="btn btn-ghost btn-block" type="button" @click="onCancelPendingImport">
+          <button
+            class="btn btn-ghost btn-block"
+            type="button"
+            :disabled="importBusy"
+            @click="onCancelPendingImport"
+          >
             Abbrechen
           </button>
         </template>
@@ -219,8 +250,12 @@ async function onMerge(): Promise<void> {
             Datei. Fortfahren?
           </p>
           <div class="action-row">
-            <button class="btn btn-ghost" type="button" @click="onCancelReplace">Abbrechen</button>
-            <button class="btn btn-danger" type="button" @click="onConfirmReplace">Ja, ersetzen</button>
+            <button class="btn btn-ghost" type="button" :disabled="importBusy" @click="onCancelReplace">
+              Abbrechen
+            </button>
+            <button class="btn btn-danger" type="button" :disabled="importBusy" @click="onConfirmReplace">
+              {{ importBusy ? 'Importiere…' : 'Ja, ersetzen' }}
+            </button>
           </div>
         </template>
       </div>
