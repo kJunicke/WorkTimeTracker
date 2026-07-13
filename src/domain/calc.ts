@@ -47,9 +47,11 @@ export function deriveDay(args: {
   const autoDeducted = labeled ? 0 : Math.max(0, required - loggedBreak)
   const net = labeled ? 0 : gross - effective
 
-  // Weekends and labeled days never generate expected time / undertime.
+  // Weekends and labeled days carry no target, so an empty one is never
+  // undertime. But weekend *work* still counts: with expected = 0 the delta
+  // is simply the net worked (pure overtime). Labeled days stay fully neutral.
   const expected = labeled || weekend ? 0 : dailyTargetSeconds
-  const delta = labeled || weekend ? 0 : net - dailyTargetSeconds
+  const delta = labeled ? 0 : net - expected
 
   return {
     date,

@@ -79,7 +79,7 @@ describe('deriveDay — break law + net/expected/delta', () => {
     expect(result.netWorkSeconds).toBe(8 * HOUR - 40 * MINUTE)
   })
 
-  it('weekend day with 8h work: expected = 0, delta = 0, but net is still computed', () => {
+  it('weekend day with 8h work: no target, so the net worked counts as pure overtime', () => {
     const result = deriveDay({
       date: '2026-05-09', // Saturday
       type: 'work',
@@ -88,8 +88,20 @@ describe('deriveDay — break law + net/expected/delta', () => {
       dailyTargetSeconds: DEFAULT_DAILY_TARGET_SECONDS,
     })
     expect(result.expectedSeconds).toBe(0)
+    expect(result.netWorkSeconds).toBe(27000) // 8h gross − 30m legal break
+    expect(result.deltaSeconds).toBe(27000) // +net, not zeroed out
+  })
+
+  it('empty weekend day: expected = 0 and delta = 0 (never undertime)', () => {
+    const result = deriveDay({
+      date: '2026-05-09', // Saturday
+      type: 'work',
+      isWeekend: true,
+      sessions: [],
+      dailyTargetSeconds: DEFAULT_DAILY_TARGET_SECONDS,
+    })
+    expect(result.expectedSeconds).toBe(0)
     expect(result.deltaSeconds).toBe(0)
-    expect(result.netWorkSeconds).toBe(27000)
   })
 
   describe('labeled days (vacation/sick/holiday) — label wins over any logged work', () => {
