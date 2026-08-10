@@ -10,6 +10,9 @@ const entries = [
   { tone: 'vacation', label: 'Urlaub' },
   { tone: 'sick', label: 'Krank' },
   { tone: 'holiday', label: 'Feiertag' },
+  // Spelled out: the whole point of the label is that it costs Gleitzeit,
+  // which the colour alone can't say.
+  { tone: 'gleitzeittag', label: 'Gleitzeittag (vom Saldo)' },
   { tone: 'weekend', label: 'Wochenende' },
 ] as const
 </script>
@@ -82,5 +85,8 @@ const entries = [
 }
 .tone-holiday {
   background: var(--holiday);
+}
+.tone-gleitzeittag {
+  background: var(--gleitzeittag);
 }
 </style>

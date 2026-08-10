@@ -35,6 +35,7 @@
   --vacation: #0ea5e9; /* Urlaub — sky */
   --sick: #f59e0b; /* Krank — amber */
   --holiday: #a855f7; /* Feiertag — purple */
+  --gleitzeittag: #14b8a6; /* Gleitzeittag — teal; must not read as Urlaub's sky */
   --weekend: #b9bac6; /* weekend — grey */
 
   /* Heatmap ramp (net work vs. target): empty → under → on → over */

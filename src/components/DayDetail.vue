@@ -10,7 +10,7 @@
 import { computed, ref } from 'vue'
 import { useStore } from '@/store/useStore'
 import { useClock } from '@/store/useClock'
-import { deriveDay } from '@/domain/calc'
+import { deriveDay, isLabeledType } from '@/domain/calc'
 import { formatDayHeading, formatDuration, formatSignedDuration, isWeekend } from '@/domain/time'
 import type { DayDerivation, DayType, Session, SessionKind } from '@/domain/types'
 import SessionRow from '@/components/SessionRow.vue'
@@ -30,6 +30,7 @@ const TYPE_COLOR_VAR: Record<DayType, string> = {
   vacation: 'var(--vacation)',
   sick: 'var(--sick)',
   holiday: 'var(--holiday)',
+  gleitzeittag: 'var(--gleitzeittag)',
 }
 
 /**
@@ -61,8 +62,11 @@ const chipColor = computed<string>(() => TYPE_COLOR_VAR[derivation.value.type])
 
 /** HANDOFF §3.5 "label wins" — surfaced so logged work that's excluded from the balance isn't a silent surprise. */
 const labelIgnoresWork = computed<boolean>(
-  () => derivation.value.type !== 'work' && derivation.value.grossWorkSeconds > 0,
+  () => isLabeledType(derivation.value.type) && derivation.value.grossWorkSeconds > 0,
 )
+
+/** A Gleitzeittag looks like an untracked day in the numbers, so say why it costs a full target (ADR 0001). */
+const isGleitzeittag = computed<boolean>(() => derivation.value.type === 'gleitzeittag')
 
 function onTypeChange(event: Event): void {
   const value = (event.target as HTMLSelectElement).value as DayType
@@ -122,6 +126,7 @@ function onEditDelete(): void {
           <option value="vacation">Urlaub</option>
           <option value="sick">Krank</option>
           <option value="holiday">Feiertag</option>
+          <option value="gleitzeittag">Gleitzeittag</option>
         </select>
         <button
           v-if="hasExplicitDayMeta"
@@ -138,6 +143,9 @@ function onEditDelete(): void {
     <p v-if="derivation.isWeekend" class="faint hint-note">Wochenende – kein Soll, zählt nicht für den Saldo.</p>
     <p v-if="labelIgnoresWork" class="faint hint-note">
       Kennzeichnung zählt – erfasste Arbeitszeit wird nicht angerechnet.
+    </p>
+    <p v-if="isGleitzeittag && !derivation.isWeekend" class="faint hint-note">
+      Gleitzeittag – volles Soll, geht vom Saldo ab. Erfasste Arbeitszeit zählt normal.
     </p>
 
     <div class="day-stats">

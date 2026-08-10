@@ -70,6 +70,18 @@ describe('parseBackup', () => {
     expect(result.data.dayMeta).toEqual(dayMeta)
   })
 
+  it('round-trips a gleitzeittag label (additive day type, still schemaVersion 1)', () => {
+    const dayMeta: DayMeta[] = [{ date: '2026-06-05', type: 'gleitzeittag', note: 'Brückentag' }]
+
+    const backup = buildBackup({ settings: mkSettings(), sessions: [], dayMeta })
+    expect(backup.schemaVersion).toBe(1)
+
+    const result = parseBackup(JSON.stringify(backup))
+    expect(result.ok).toBe(true)
+    if (!result.ok) throw new Error('expected ok:true')
+    expect(result.data.dayMeta).toEqual(dayMeta)
+  })
+
   it('accepts an open session (endMs: null)', () => {
     const backup = buildBackup({ settings: mkSettings(), sessions: [mkSession({ endMs: null })], dayMeta: [] })
     const result = parseBackup(JSON.stringify(backup))

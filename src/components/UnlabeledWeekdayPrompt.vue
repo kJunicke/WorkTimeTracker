@@ -45,6 +45,9 @@ function label(type: DayType): void {
       <button class="btn" @click="label('vacation')">Urlaub</button>
       <button class="btn" @click="label('sick')">Krank</button>
       <button class="btn" @click="label('holiday')">Feiertag</button>
+      <!-- Spans the row: this is the answer for "I took the day off on purpose",
+           which is the only thing separating it from an untracked day. -->
+      <button class="btn wide" @click="label('gleitzeittag')">Gleitzeittag (vom Saldo)</button>
     </div>
   </div>
 </template>
@@ -59,5 +62,8 @@ function label(type: DayType): void {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 8px;
+}
+.wide {
+  grid-column: 1 / -1;
 }
 </style>

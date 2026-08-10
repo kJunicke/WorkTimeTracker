@@ -125,6 +125,51 @@ describe('deriveDay — break law + net/expected/delta', () => {
     }
   })
 
+  describe('gleitzeittag — NOT a credited day, derives exactly like an ordinary work day (ADR 0001)', () => {
+    it('empty weekday: carries the full target, so delta = −1 daily target', () => {
+      const result = deriveDay({
+        date: '2026-05-06',
+        type: 'gleitzeittag',
+        isWeekend: false,
+        sessions: [],
+        dailyTargetSeconds: DEFAULT_DAILY_TARGET_SECONDS,
+      })
+      expect(result.netWorkSeconds).toBe(0)
+      expect(result.expectedSeconds).toBe(DEFAULT_DAILY_TARGET_SECONDS)
+      expect(result.deltaSeconds).toBe(-DEFAULT_DAILY_TARGET_SECONDS)
+    })
+
+    it('with logged work: derives identically to the same day labeled `work`', () => {
+      const args = {
+        date: '2026-05-06',
+        isWeekend: false,
+        // 8h gross + 10m logged break -> 30m required, 20m topped up.
+        sessions: [mkSession('work', 8 * HOUR), mkSession('break', 10 * MINUTE)],
+        dailyTargetSeconds: DEFAULT_DAILY_TARGET_SECONDS,
+      }
+      const flex = deriveDay({ ...args, type: 'gleitzeittag' })
+      const work = deriveDay({ ...args, type: 'work' })
+
+      // The label is the ONLY difference — same net, same auto-deducted break, same delta.
+      expect({ ...flex, type: 'work' }).toEqual(work)
+      expect(flex.netWorkSeconds).toBe(27000)
+      expect(flex.autoDeductedSeconds).toBe(1200)
+      expect(flex.deltaSeconds).toBe(27000 - DEFAULT_DAILY_TARGET_SECONDS)
+    })
+
+    it('empty weekend: costs nothing, as any weekend does', () => {
+      const result = deriveDay({
+        date: '2026-05-09', // Saturday
+        type: 'gleitzeittag',
+        isWeekend: true,
+        sessions: [],
+        dailyTargetSeconds: DEFAULT_DAILY_TARGET_SECONDS,
+      })
+      expect(result.expectedSeconds).toBe(0)
+      expect(result.deltaSeconds).toBe(0)
+    })
+  })
+
   it('normal workday, net below target -> negative delta', () => {
     const result = deriveDay({
       date: '2026-05-06',

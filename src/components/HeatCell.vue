@@ -5,7 +5,17 @@
 // tone; it never touches the store or re-derives anything.
 import { computed } from 'vue'
 
-type DayTone = 'empty' | 'under' | 'on' | 'over' | 'weekend' | 'vacation' | 'sick' | 'holiday' | 'muted'
+type DayTone =
+  | 'empty'
+  | 'under'
+  | 'on'
+  | 'over'
+  | 'weekend'
+  | 'vacation'
+  | 'sick'
+  | 'holiday'
+  | 'gleitzeittag'
+  | 'muted'
 
 const props = withDefaults(
   defineProps<{
@@ -24,15 +34,16 @@ const emit = defineEmits<{
 }>()
 
 /**
- * Vacation/Sick/Holiday additionally carry a short letter badge, so the
- * category is never conveyed by color alone (a11y: identity isn't
- * color-only — weekend/heat tones already read from grid position/day
- * number + the legend).
+ * Labeled days additionally carry a short letter badge, so the category is
+ * never conveyed by color alone (a11y: identity isn't color-only —
+ * weekend/heat tones already read from grid position/day number + the
+ * legend).
  */
 const BADGE_BY_TONE: Partial<Record<DayTone, string>> = {
   vacation: 'U',
   sick: 'K',
   holiday: 'F',
+  gleitzeittag: 'G',
 }
 const badge = computed<string | undefined>(() => BADGE_BY_TONE[props.tone])
 
@@ -115,6 +126,9 @@ function onClick(): void {
 }
 .tone-holiday {
   background: var(--holiday);
+}
+.tone-gleitzeittag {
+  background: var(--gleitzeittag);
 }
 .tone-muted {
   background: transparent;

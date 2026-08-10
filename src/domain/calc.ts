@@ -5,8 +5,17 @@ import type { Session, DayMeta, DayType, DayDerivation } from './types'
 import { sessionSeconds, enumerateDays, isWeekend } from './time'
 import { SIX_HOURS, NINE_HOURS, THIRTY_MIN, FORTY_FIVE_MIN } from './constants'
 
-/** Label wins: vacation/sick/holiday credit the day regardless of logged work (HANDOFF §3.5). */
-function isLabeledType(type: DayType): boolean {
+/**
+ * Label wins: vacation/sick/holiday credit the day regardless of logged work
+ * (HANDOFF §3.5) — the gutgeschriebene Tage.
+ *
+ * `gleitzeittag` is deliberately NOT in this set (ADR 0001): that single
+ * omission is what makes it derive exactly like an ordinary work day — full
+ * target, sessions under the normal break rules — with no branch of its own
+ * anywhere below. Exported so the UI can ask the same question rather than
+ * re-listing the members.
+ */
+export function isLabeledType(type: DayType): boolean {
   return type === 'vacation' || type === 'sick' || type === 'holiday'
 }
 

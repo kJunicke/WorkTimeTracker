@@ -18,18 +18,30 @@ import {
   monthKey,
   todayKey,
 } from '@/domain/time'
+import { isLabeledType } from '@/domain/calc'
 import { THIRTY_MIN } from '@/domain/constants'
 import type { DayType } from '@/domain/types'
 import DayDetail from '@/components/DayDetail.vue'
 import HeatCell from '@/components/HeatCell.vue'
 import CalendarLegend from '@/components/CalendarLegend.vue'
 
-type DayTone = 'empty' | 'under' | 'on' | 'over' | 'weekend' | 'vacation' | 'sick' | 'holiday' | 'muted'
+type DayTone =
+  | 'empty'
+  | 'under'
+  | 'on'
+  | 'over'
+  | 'weekend'
+  | 'vacation'
+  | 'sick'
+  | 'holiday'
+  | 'gleitzeittag'
+  | 'muted'
 
-const DAY_TYPE_LABEL_DE: Record<'vacation' | 'sick' | 'holiday', string> = {
+const DAY_TYPE_LABEL_DE: Record<Exclude<DayType, 'work'>, string> = {
   vacation: 'Urlaub',
   sick: 'Krank',
   holiday: 'Feiertag',
+  gleitzeittag: 'Gleitzeittag',
 }
 const WEEKDAY_LABELS = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'] as const
 
@@ -62,10 +74,11 @@ function goToday(): void {
 
 /**
  * Which tone a date's cell gets (HANDOFF §4.4). Precedence: days outside
- * [balanceStartDate..today] (incl. future) are muted; then an explicit
- * vacation/sick/holiday label wins (the user set it deliberately — respect it
- * even in the rare case of a labeled weekend); then weekend styling; then the
- * heat ramp (empty → under → on-target → over) for an ordinary work day.
+ * [balanceStartDate..today] (incl. future) are muted; then any explicit
+ * non-work label wins (the user set it deliberately — respect it even in the
+ * rare case of a labeled weekend, and for a Gleitzeittag even when work was
+ * logged on it); then weekend styling; then the heat ramp (empty → under →
+ * on-target → over) for an ordinary work day.
  */
 function toneFor(date: string): DayTone {
   const start = store.settings.value.balanceStartDate
@@ -73,7 +86,7 @@ function toneFor(date: string): DayTone {
 
   const derivation = store.derivedDays.value.get(date)
   const type: DayType = derivation?.type ?? store.dayMetaByDay.value.get(date)?.type ?? 'work'
-  if (type === 'vacation' || type === 'sick' || type === 'holiday') return type
+  if (type !== 'work') return type
 
   if (isWeekend(date)) return 'weekend'
 
@@ -91,8 +104,13 @@ function titleFor(date: string, tone: DayTone): string {
   if (tone === 'muted') return heading
   const derivation = store.derivedDays.value.get(date)
   if (!derivation) return heading
-  if (derivation.type !== 'work') return `${heading} · ${DAY_TYPE_LABEL_DE[derivation.type]}`
-  return `${heading} · ${formatDuration(derivation.netWorkSeconds)} von ${formatDuration(derivation.expectedSeconds)}`
+  const hours = `${formatDuration(derivation.netWorkSeconds)} von ${formatDuration(derivation.expectedSeconds)}`
+  const type = derivation.type
+  if (type === 'work') return `${heading} · ${hours}`
+  // A credited day's hours are meaningless (the label zeroes them out); a
+  // Gleitzeittag's are not — it carries a target and counts what was worked.
+  if (isLabeledType(type)) return `${heading} · ${DAY_TYPE_LABEL_DE[type]}`
+  return `${heading} · ${DAY_TYPE_LABEL_DE[type]} · ${hours}`
 }
 
 const gridCells = computed<CellData[]>(() =>

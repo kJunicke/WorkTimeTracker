@@ -17,8 +17,12 @@ export interface Session {
   note: string
 }
 
-/** Exactly one label per calendar day, mutually exclusive (HANDOFF §3.5). */
-export type DayType = 'work' | 'vacation' | 'sick' | 'holiday'
+/**
+ * Exactly one label per calendar day, mutually exclusive (HANDOFF §3.5).
+ * `gleitzeittag` is a day off drawn from the Gleitzeit rather than the
+ * Urlaubskonto — deliberately NOT a credited day, see ADR 0001.
+ */
+export type DayType = 'work' | 'vacation' | 'sick' | 'holiday' | 'gleitzeittag'
 
 /** Per-day metadata, stored separately from sessions. Absence ⇒ ordinary work day. */
 export interface DayMeta {
