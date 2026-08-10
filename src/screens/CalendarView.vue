@@ -10,6 +10,8 @@ import { useStore } from '@/store/useStore'
 import { useClock } from '@/store/useClock'
 import {
   addMonths,
+  endOfMonth,
+  formatDatum,
   formatDayHeading,
   formatDuration,
   formatMonthHeading,
@@ -17,6 +19,7 @@ import {
   isWeekend,
   monthGridDays,
   monthKey,
+  startOfMonth,
   todayKey,
   yearKey,
 } from '@/domain/time'
@@ -24,6 +27,7 @@ import { isLabeledType } from '@/domain/calc'
 import { THIRTY_MIN } from '@/domain/constants'
 import type { DayType } from '@/domain/types'
 import { ohneGleitzeittage, planUrlaubSpan } from '@/domain/vacation'
+import { FEIERTAGE_AB, FEIERTAGE_GEPRUEFT_BIS, FEIERTAGE_LAND } from '@/domain/holidays'
 import type { UrlaubSpanPlan } from '@/domain/vacation'
 import DayDetail from '@/components/DayDetail.vue'
 import HeatCell from '@/components/HeatCell.vue'
@@ -123,6 +127,25 @@ const gridCells = computed<CellData[]>(() =>
       title: titleFor(date, tone),
     }
   }),
+)
+
+// ---------------------------------------------------------------------
+// Feiertags-Hinweis — how far the automatic Feiertage actually reach
+// ---------------------------------------------------------------------
+//
+// The Feiertage are applied silently, so the Kalender has to say out loud how
+// far they have been verified: without it a month past the horizon looks
+// identical to one inside it, and the user would only notice the missing
+// Feiertag by re-deriving the year in their head. The dates come from
+// `@/domain/holidays`, so moving that horizon moves this note with it.
+
+const geprueftBis = computed<string>(() => formatDatum(FEIERTAGE_GEPRUEFT_BIS))
+
+/** True once the whole displayed month lies past the verified window. */
+const monatOhneFeiertage = computed<boolean>(
+  () =>
+    startOfMonth(viewMonth.value) > FEIERTAGE_GEPRUEFT_BIS ||
+    endOfMonth(viewMonth.value) < FEIERTAGE_AB,
 )
 
 // ---------------------------------------------------------------------
@@ -274,6 +297,22 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
       </template>
     </section>
 
+    <section class="card feiertage-card">
+      <h3 class="feiertage-title">Feiertage</h3>
+      <p class="muted feiertage-note">
+        Gesetzliche Feiertage in {{ FEIERTAGE_LAND }} werden automatisch gekennzeichnet —
+        eingetragen und gegen das Feiertagsgesetz geprüft bis
+        <strong>{{ geprueftBis }}</strong>.
+      </p>
+      <p v-if="monatOhneFeiertage" class="faint feiertage-warn">
+        Für {{ monthHeading }} sind keine Feiertage hinterlegt. Bitte selbst kennzeichnen.
+      </p>
+      <p class="faint feiertage-note">
+        Eine eigene Kennzeichnung geht immer vor — an einem Feiertag gearbeitet? Tag antippen und
+        umstellen.
+      </p>
+    </section>
+
     <CalendarLegend />
 
     <div v-if="selectedDate" class="overlay" @click.self="onCloseDetail">
@@ -391,6 +430,27 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
   margin: 0;
   font-size: 12.5px;
   text-align: center;
+}
+
+.feiertage-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.feiertage-title {
+  font-size: 14px;
+}
+.feiertage-note {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.4;
+}
+.feiertage-warn {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.4;
+  color: var(--accent-strong);
+  font-weight: 600;
 }
 
 .overlay {

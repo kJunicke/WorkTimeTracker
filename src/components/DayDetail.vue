@@ -13,6 +13,7 @@ import { useClock } from '@/store/useClock'
 import { deriveDay, isLabeledType } from '@/domain/calc'
 import { formatDayHeading, formatDuration, formatSignedDuration, isWeekend, yearKey } from '@/domain/time'
 import { planTageskennzeichnung } from '@/domain/vacation'
+import { FEIERTAGE_LAND, feiertagAm } from '@/domain/holidays'
 import type { DayDerivation, DayType, Session, SessionKind } from '@/domain/types'
 import SessionRow from '@/components/SessionRow.vue'
 import SessionEditor from '@/components/SessionEditor.vue'
@@ -58,7 +59,19 @@ const daySessions = computed<Session[]>(() =>
   [...(store.sessionsByDay.value.get(props.date) ?? [])].sort((a, b) => a.startMs - b.startMs),
 )
 
-const hasExplicitDayMeta = computed<boolean>(() => store.dayMetaByDay.value.has(props.date))
+// Only a *stored* label can be reset — resetting an auto-applied Feiertag
+// would write nothing and change nothing, so the button stays hidden for one.
+const hasExplicitDayMeta = computed<boolean>(() => store.explicitDayMetaByDay.value.has(props.date))
+
+/**
+ * The Feiertag this day is, when it carries no stored label of its own — so the
+ * day says *which* Feiertag it is, and that the label came from the app rather
+ * than from the user (who can still override it with the select above).
+ */
+const autoFeiertag = computed<string | null>(() => {
+  if (hasExplicitDayMeta.value) return null
+  return feiertagAm(props.date)?.name ?? null
+})
 const deltaTone = computed<'over' | 'under'>(() => (derivation.value.deltaSeconds >= 0 ? 'over' : 'under'))
 const chipColor = computed<string>(() => TYPE_COLOR_VAR[derivation.value.type])
 
@@ -171,6 +184,10 @@ function onEditDelete(): void {
       </div>
     </header>
 
+    <p v-if="autoFeiertag" class="faint hint-note">
+      {{ autoFeiertag }} – gesetzlicher Feiertag in {{ FEIERTAGE_LAND }}, automatisch gekennzeichnet.
+      Oben änderbar, falls doch gearbeitet wurde.
+    </p>
     <p v-if="derivation.isWeekend" class="faint hint-note">Wochenende – kein Soll, zählt nicht für den Saldo.</p>
     <p v-if="labelIgnoresWork" class="faint hint-note">
       Kennzeichnung zählt – erfasste Arbeitszeit wird nicht angerechnet.

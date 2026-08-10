@@ -25,6 +25,13 @@ It neither carries a target nor contributes to the Gleitzeit, whatever is
 logged on it. A Gleitzeittag is explicitly not one of these.
 _Avoid_: Labeled day, off day
 
+**Feiertag** (public holiday):
+A day the Feiertagsgesetz of the user's Bundesland — Berlin — declares a
+gesetzlicher Feiertag. It is a gutgeschriebener Tag, and the app knows the list
+itself: a Feiertag carries the `holiday` label automatically unless the user
+labeled the day otherwise (ADR 0003).
+_Avoid_: Holiday (English, collides with Urlaub), Bank holiday
+
 **Gleitzeit** (balance):
 The running sum of every day's surplus or shortfall against the daily target,
 accumulated from the balance start date onward.

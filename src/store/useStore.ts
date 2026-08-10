@@ -21,6 +21,7 @@ import type {
 import { dayKeyFromMs, enumerateDays, isWeekend, todayKey } from '@/domain/time'
 import { deriveDay, deriveRange } from '@/domain/calc'
 import { deriveUrlaubskonto, urlaubsanspruchFor } from '@/domain/vacation'
+import { feiertageImFenster } from '@/domain/holidays'
 import type { UrlaubSpanPlan, Urlaubskonto } from '@/domain/vacation'
 import {
   DEFAULT_BALANCE_START_DATE,
@@ -73,8 +74,37 @@ const pendingReconciliation = ref<PendingReconciliation | null>(null)
 // Computed derivations
 // ---------------------------------------------------------------------------
 
+/** ONLY what the user actually stored — no auto-applied Feiertage. */
+const explicitDayMetaByDay = computed<Map<string, DayMeta>>(() => {
+  const map = new Map<string, DayMeta>()
+  for (const m of dayMeta.value) map.set(m.date, m)
+  return map
+})
+
+/**
+ * The labels everything *derives* from: the stored ones, with Berlin's
+ * Feiertage filled in underneath for every day the user never labeled
+ * (`@/domain/holidays`).
+ *
+ * Overlaying here rather than writing `holiday` rows to IndexedDB is what makes
+ * the feature answer the spec's three open questions at once, with no migration
+ * and nothing to keep in step:
+ *
+ *  - A stored row always wins, so a manual label is never overwritten — someone
+ *    who worked on a Feiertag says so once and it sticks, and `clearDayType`
+ *    puts the day back to Feiertag rather than to nothing.
+ *  - It applies to past and future days alike, because it is a *view*, not a
+ *    one-off backfill: correcting the verified window corrects every day at
+ *    once instead of leaving stale rows behind.
+ *  - Nothing synthetic can reach the disk or a backup, both of which read the
+ *    raw `dayMeta` ref.
+ *
+ * The synthetic rows carry the Feiertag's name as their note, so the day view
+ * says *which* Feiertag it is without any screen knowing the list.
+ */
 const dayMetaByDay = computed<Map<string, DayMeta>>(() => {
   const map = new Map<string, DayMeta>()
+  for (const f of feiertageImFenster()) map.set(f.date, { date: f.date, type: 'holiday', note: f.name })
   for (const m of dayMeta.value) map.set(m.date, m)
   return map
 })
@@ -428,7 +458,7 @@ async function applyUrlaubSpanPlan(plan: UrlaubSpanPlan): Promise<void> {
     for (const date of dates) {
       // Carry any note the day already had: only unlabeled/`work` days reach
       // here, and re-labeling one should not silently drop what the user wrote.
-      await setDayType(date, type, dayMetaByDay.value.get(date)?.note ?? '')
+      await setDayType(date, type, explicitDayMetaByDay.value.get(date)?.note ?? '')
     }
   }
   await write(plan.vacation, 'vacation')
@@ -542,6 +572,7 @@ const store = {
   pendingReconciliation,
   // computed
   dayMetaByDay,
+  explicitDayMetaByDay,
   openSession,
   timerState,
   elapsedSeconds,

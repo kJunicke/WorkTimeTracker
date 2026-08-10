@@ -19,11 +19,15 @@ const store = useStore()
  * unlabeled-weekday prompt's job, HANDOFF §3.5) — which also means a day
  * with zero data has no card here, hence the *global* add entry point below
  * (a per-day add button alone couldn't reach such a day).
+ *
+ * `explicitDayMetaByDay`, not the effective map: an auto-applied Feiertag is
+ * not a day the user recorded anything on, and listing them would fill this
+ * screen with cards for empty days — including ones years in the future.
  */
 const dateKeys = computed<string[]>(() => {
   const keys = new Set<string>()
   for (const key of store.sessionsByDay.value.keys()) keys.add(key)
-  for (const key of store.dayMetaByDay.value.keys()) keys.add(key)
+  for (const key of store.explicitDayMetaByDay.value.keys()) keys.add(key)
   return [...keys].sort().reverse()
 })
 

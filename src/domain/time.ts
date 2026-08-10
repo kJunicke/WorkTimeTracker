@@ -145,6 +145,15 @@ export function formatDayHeading(dateKey: string): string {
 }
 
 /**
+ * "31.12.2027" — the same German dotted date as `formatDayHeading` but without
+ * the weekday, for prose where the weekday would only be noise.
+ */
+export function formatDatum(dateKey: string): string {
+  const [y, m, d] = dateKey.split('-').map(Number)
+  return `${pad2(d)}.${pad2(m)}.${y}`
+}
+
+/**
  * "YYYY-MM-DDTHH:mm" local time, matching the value format of a native
  * `<input type="datetime-local">`. Used to prefill session-edit forms from
  * an epoch-millis instant (History/Calendar session editing).
