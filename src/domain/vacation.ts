@@ -137,17 +137,20 @@ export interface UrlaubSpanPlan {
   /** Days to be written as `vacation`, in calendar order. */
   vacation: string[]
   /**
-   * Days to be written as `gleitzeittag`, in calendar order. Always empty
-   * today: the over-long span is a separate concern (see `planUrlaubSpan`).
-   * The bucket exists so that filling it later needs no change at the call
-   * sites, which already apply both buckets.
+   * Weekdays past the budget, in calendar order — an **offer**, not a decision.
+   * Writing these spends Gleitzeit, so the caller must ask before applying
+   * them; `ohneGleitzeittage` is the declined form of the same plan.
    */
   gleitzeittag: string[]
   /** Days left untouched, in calendar order, each with the label it keeps. */
   skipped: UrlaubSpanSkip[]
   /** Vacation days this plan draws from the Urlaubskonto — weekdays only. */
   kosten: number
-  /** `uebrig` minus `kosten`. Negative when the span does not fit; see below. */
+  /**
+   * `uebrig` minus `kosten`. Never below zero for a fresh plan — the cap
+   * moves the overflow into `gleitzeittag` rather than overdrawing — except
+   * when the year was *already* over-drawn, where it simply reports that.
+   */
   uebrigDanach: number
 }
 
@@ -165,11 +168,15 @@ export interface UrlaubSpanPlan {
  *     in the Kalender — but never consume budget: a weekend carries no daily
  *     target, so there is nothing to be credited for.
  *  3. Every remaining weekday becomes Urlaub and costs one day.
+ *  4. Once the budget is exhausted, every further weekday comes back as a
+ *     Gleitzeittag *candidate* — never as Urlaub. That is what makes the
+ *     Urlaubsanspruch a hard cap (ADR 0001): the plan can no longer overdraw
+ *     it, so `uebrigDanach` cannot be driven below zero by marking a span.
  *
- * The over-long span — more weekdays than `uebrig` allows — is deliberately
- * NOT handled here yet: such a plan simply comes back with a negative
- * `uebrigDanach`, which the caller refuses. Offering the overflow weekdays as
- * Gleitzeittage instead is the job of the `gleitzeittag` bucket above.
+ * The candidates are an offer, never a decision: a Gleitzeittag costs its
+ * daily target against the Gleitzeit, and the app must never spend Gleitzeit
+ * without asking. The caller applies `gleitzeittag` only if the user says yes,
+ * and `ohneGleitzeittage` is the declined form of the same plan.
  *
  * `uebrig` is passed in rather than derived, because whose budget a span draws
  * on is the caller's question (a span crossing a Urlaubsjahr boundary is not
@@ -189,8 +196,13 @@ export function planUrlaubSpan(args: {
   const [start, end] = args.start <= args.end ? [args.start, args.end] : [args.end, args.start]
 
   const vacation: string[] = []
+  const gleitzeittag: string[] = []
   const skipped: UrlaubSpanSkip[] = []
   let kosten = 0
+
+  // An already over-drawn Urlaubsjahr (übrig may be negative) is simply no
+  // budget — never a debt this span is asked to pay off before it may spend.
+  const budget = Math.max(0, uebrig)
 
   for (const date of enumerateDays(start, end)) {
     const existing = dayMetaByDay.get(date)
@@ -198,9 +210,31 @@ export function planUrlaubSpan(args: {
       skipped.push({ date, type: existing.type, reason: 'labeled' })
       continue
     }
-    vacation.push(date)
-    if (!isWeekend(date)) kosten += 1
+    // Weekends can never overflow: they consume no budget, so there is nothing
+    // for them to run out of and they stay Urlaub whatever remains.
+    if (isWeekend(date)) {
+      vacation.push(date)
+      continue
+    }
+    if (kosten < budget) {
+      vacation.push(date)
+      kosten += 1
+    } else {
+      gleitzeittag.push(date)
+    }
   }
 
-  return { start, end, vacation, gleitzeittag: [], skipped, kosten, uebrigDanach: uebrig - kosten }
+  return { start, end, vacation, gleitzeittag, skipped, kosten, uebrigDanach: uebrig - kosten }
+}
+
+/**
+ * The same plan with the Gleitzeittag offer declined: the overflow weekdays
+ * are dropped, so applying it leaves them untouched while every Urlaub day the
+ * budget covered is still written. The plan given is never mutated.
+ *
+ * It lives here rather than at the call site so that "declining" means exactly
+ * one thing everywhere, and so the rule stays testable without a store.
+ */
+export function ohneGleitzeittage(plan: UrlaubSpanPlan): UrlaubSpanPlan {
+  return { ...plan, gleitzeittag: [] }
 }

@@ -418,8 +418,10 @@ async function clearDayType(date: string): Promise<void> {
  * have. Until this is called nothing has been written, which is what makes
  * cancelling the confirmation free.
  *
- * Both buckets are applied even though the Gleitzeittag one is always empty
- * today — so that filling it needs no change here.
+ * Both buckets are written unconditionally. Whether the Gleitzeittag offer was
+ * accepted is not asked here: a declined plan reaches this function with that
+ * bucket already emptied (`ohneGleitzeittage`), so the consent question stays
+ * in exactly one place instead of being re-decided at the write.
  */
 async function applyUrlaubSpanPlan(plan: UrlaubSpanPlan): Promise<void> {
   const write = async (dates: readonly string[], type: DayType): Promise<void> => {

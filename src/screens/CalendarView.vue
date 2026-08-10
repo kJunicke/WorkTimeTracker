@@ -22,7 +22,7 @@ import {
 import { isLabeledType } from '@/domain/calc'
 import { THIRTY_MIN } from '@/domain/constants'
 import type { DayType } from '@/domain/types'
-import { planUrlaubSpan } from '@/domain/vacation'
+import { ohneGleitzeittage, planUrlaubSpan } from '@/domain/vacation'
 import type { UrlaubSpanPlan } from '@/domain/vacation'
 import DayDetail from '@/components/DayDetail.vue'
 import HeatCell from '@/components/HeatCell.vue'
@@ -210,10 +210,15 @@ function onSelectDay(date: string): void {
   })
 }
 
-async function onConfirmSpan(): Promise<void> {
+/**
+ * `mitGleitzeittagen` is the user's answer to the confirmation's offer, so a
+ * declined offer applies the very same plan minus its candidates — the Urlaub
+ * days that fit are still written, the rest stays untouched.
+ */
+async function onConfirmSpan(mitGleitzeittagen: boolean): Promise<void> {
   const plan = pendingPlan.value
   if (!plan) return
-  await store.applyUrlaubSpanPlan(plan)
+  await store.applyUrlaubSpanPlan(mitGleitzeittagen ? plan : ohneGleitzeittage(plan))
   cancelSpanMode()
 }
 

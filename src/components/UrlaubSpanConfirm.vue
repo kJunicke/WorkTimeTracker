@@ -16,7 +16,11 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  confirm: []
+  /**
+   * Apply the plan. `mitGleitzeittagen` carries the user's answer to the
+   * offer — the app never spends Gleitzeit unless this is explicitly `true`.
+   */
+  confirm: [mitGleitzeittagen: boolean]
   cancel: []
 }>()
 
@@ -65,11 +69,12 @@ function skipLine(skip: UrlaubSpanPlan['skipped'][number]): string {
 }
 
 /**
- * The span draws more vacation days than remain. Out of scope here — the plan
- * is refused rather than partially applied, so the Urlaubsanspruch stays a
- * hard cap (spec "Solution").
+ * The span ran past the Urlaubsanspruch and the planner offers the remainder
+ * as Gleitzeittage. Presented as two distinct actions rather than a checkbox:
+ * spending Gleitzeit has to be something the user says out loud, not something
+ * a pre-ticked default does for them.
  */
-const fehlend = computed<number>(() => Math.max(0, -props.plan.uebrigDanach))
+const hatAngebot = computed<boolean>(() => props.plan.gleitzeittag.length > 0)
 </script>
 
 <template>
@@ -89,20 +94,38 @@ const fehlend = computed<number>(() => Math.max(0, -props.plan.uebrigDanach))
         Kostet {{ formatTage(plan.kosten) }} vom Urlaubskonto – Wochenenden zählen nicht.
       </p>
 
-      <p v-if="fehlend > 0" class="error">
-        Nicht genug Urlaub übrig: es fehlen {{ formatTage(fehlend) }}.
-      </p>
-      <p v-else class="faint detail">Danach übrig: {{ formatTage(plan.uebrigDanach) }}</p>
+      <p class="faint detail">Danach übrig: {{ formatTage(plan.uebrigDanach) }}</p>
 
       <ul v-if="plan.skipped.length > 0" class="skipped-list">
         <li v-for="skip in plan.skipped" :key="skip.date" class="faint">{{ skipLine(skip) }}</li>
       </ul>
 
+      <template v-if="hatAngebot">
+        <p class="offer">
+          Nicht genug Urlaub übrig: {{ formatTage(plan.gleitzeittag.length) }} passen nicht mehr ins
+          Urlaubskonto. Sollen sie als Gleitzeittage eingetragen werden?
+        </p>
+        <p class="faint detail">
+          Gleitzeittage kosten keinen Urlaub – sie gehen von der Gleitzeit ab.
+        </p>
+        <button class="btn btn-primary btn-block" type="button" @click="emit('confirm', true)">
+          Urlaub eintragen und Rest als Gleitzeittage
+        </button>
+        <button
+          class="btn btn-block"
+          type="button"
+          :disabled="plan.vacation.length === 0"
+          @click="emit('confirm', false)"
+        >
+          Nur Urlaub eintragen
+        </button>
+      </template>
       <button
+        v-else
         class="btn btn-primary btn-block"
         type="button"
-        :disabled="fehlend > 0 || plan.vacation.length === 0"
-        @click="emit('confirm')"
+        :disabled="plan.vacation.length === 0"
+        @click="emit('confirm', false)"
       >
         Eintragen
       </button>
@@ -176,7 +199,7 @@ const fehlend = computed<number>(() => Math.max(0, -props.plan.uebrigDanach))
   font-size: 12.5px;
 }
 
-.error {
+.offer {
   color: var(--under);
   font-size: 13px;
   font-weight: 600;
