@@ -7,8 +7,8 @@
 // Scope"): the user folds last year's remainder into a year's Urlaubsanspruch
 // by hand, which sidesteps every expiry rule.
 
-import type { DayMeta, Settings } from './types'
-import { isWeekend, yearKey } from './time'
+import type { DayMeta, DayType, Settings } from './types'
+import { enumerateDays, isWeekend, yearKey } from './time'
 import { DEFAULT_URLAUBSANSPRUCH } from './constants'
 
 /** The two entitlement settings fields, both optional-with-default on read. */
@@ -105,4 +105,102 @@ export function deriveUrlaubskonto(args: {
   }
 
   return { urlaubsjahr, anspruch, genommen, verplant, uebrig: anspruch - genommen - verplant }
+}
+
+// ---------------------------------------------------------------------------
+// Planning a span of Urlaub
+// ---------------------------------------------------------------------------
+
+/**
+ * Why a day inside a span was left untouched. A union of one for now — it
+ * exists so the confirmation can state a reason per day rather than a bare
+ * count, and so a later reason can be added without changing the shape.
+ */
+export type UrlaubSpanSkipReason = 'labeled'
+
+/** One day the plan will NOT write, and what it keeps instead. */
+export interface UrlaubSpanSkip {
+  date: string
+  /** The Tageskennzeichnung the day already carries and keeps. */
+  type: DayType
+  reason: UrlaubSpanSkipReason
+}
+
+/**
+ * What marking a span would write — pure data, applied only once the user
+ * confirms it. Nothing in here has been persisted.
+ */
+export interface UrlaubSpanPlan {
+  /** Inclusive span the plan covers, normalized so `start` <= `end`. */
+  start: string
+  end: string
+  /** Days to be written as `vacation`, in calendar order. */
+  vacation: string[]
+  /**
+   * Days to be written as `gleitzeittag`, in calendar order. Always empty
+   * today: the over-long span is a separate concern (see `planUrlaubSpan`).
+   * The bucket exists so that filling it later needs no change at the call
+   * sites, which already apply both buckets.
+   */
+  gleitzeittag: string[]
+  /** Days left untouched, in calendar order, each with the label it keeps. */
+  skipped: UrlaubSpanSkip[]
+  /** Vacation days this plan draws from the Urlaubskonto — weekdays only. */
+  kosten: number
+  /** `uebrig` minus `kosten`. Negative when the span does not fit; see below. */
+  uebrigDanach: number
+}
+
+/**
+ * Plans marking a continuous span as Urlaub. **It writes nothing** — the
+ * caller applies the returned plan only after the user confirms it, so
+ * cancelling the confirmation costs nothing at all.
+ *
+ * Rules, in order:
+ *  1. A day already carrying a non-`work` label was set deliberately: it is
+ *     skipped, keeps that label, and consumes no vacation day. An explicit
+ *     `work` row is not a label in that sense and is overwritten like a day
+ *     that carries no row at all.
+ *  2. Weekends always become Urlaub — so the whole period reads as time away
+ *     in the Kalender — but never consume budget: a weekend carries no daily
+ *     target, so there is nothing to be credited for.
+ *  3. Every remaining weekday becomes Urlaub and costs one day.
+ *
+ * The over-long span — more weekdays than `uebrig` allows — is deliberately
+ * NOT handled here yet: such a plan simply comes back with a negative
+ * `uebrigDanach`, which the caller refuses. Offering the overflow weekdays as
+ * Gleitzeittage instead is the job of the `gleitzeittag` bucket above.
+ *
+ * `uebrig` is passed in rather than derived, because whose budget a span draws
+ * on is the caller's question (a span crossing a Urlaubsjahr boundary is not
+ * modelled — see spec "Out of Scope").
+ */
+export function planUrlaubSpan(args: {
+  /** Either end of the span; the two are swapped if given in reverse order. */
+  start: string
+  end: string
+  /** Existing labels by "YYYY-MM-DD", as held by the store. Never mutated. */
+  dayMetaByDay: ReadonlyMap<string, DayMeta>
+  /** Remaining budget (übrig) the span draws on. */
+  uebrig: number
+}): UrlaubSpanPlan {
+  const { dayMetaByDay, uebrig } = args
+  // "YYYY-MM-DD" sorts lexicographically, so this is the whole normalization.
+  const [start, end] = args.start <= args.end ? [args.start, args.end] : [args.end, args.start]
+
+  const vacation: string[] = []
+  const skipped: UrlaubSpanSkip[] = []
+  let kosten = 0
+
+  for (const date of enumerateDays(start, end)) {
+    const existing = dayMetaByDay.get(date)
+    if (existing && existing.type !== 'work') {
+      skipped.push({ date, type: existing.type, reason: 'labeled' })
+      continue
+    }
+    vacation.push(date)
+    if (!isWeekend(date)) kosten += 1
+  }
+
+  return { start, end, vacation, gleitzeittag: [], skipped, kosten, uebrigDanach: uebrig - kosten }
 }

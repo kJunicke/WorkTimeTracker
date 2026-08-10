@@ -1,5 +1,6 @@
 import {
   deriveUrlaubskonto,
+  planUrlaubSpan,
   resolveUrlaubsanspruchSettings,
   setUrlaubsanspruchOverride,
   urlaubsanspruchFor,
@@ -11,6 +12,11 @@ import { DEFAULT_URLAUBSANSPRUCH } from './constants'
 /** Day label fixture; the note never matters to the Urlaubskonto. */
 function mkMeta(date: string, type: DayType): DayMeta {
   return { date, type, note: '' }
+}
+
+/** The by-day label map the planner reads, mirroring `store.dayMetaByDay`. */
+function mkMetaMap(...metas: DayMeta[]): Map<string, DayMeta> {
+  return new Map(metas.map((m) => [m.date, m]))
 }
 
 // 2026-08-10 is a Monday, so the surrounding weekdays/weekends below are stable.
@@ -241,5 +247,208 @@ describe('deriveUrlaubskonto — übrig against the Urlaubsanspruch', () => {
     expect(konto.genommen).toBe(5)
     expect(konto.verplant).toBe(0)
     expect(konto.uebrig).toBe(-2)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// planUrlaubSpan
+//
+// Every span below sits in August 2026, where 2026-08-10 is a Monday — so
+// 10.–14. and 17.–21. are weekdays and 15./16. and 22./23. are the weekends
+// between and after them.
+// ---------------------------------------------------------------------------
+
+const TWO_WEEK_BLOCK = { start: '2026-08-10', end: '2026-08-23' } // Mo through the second So
+
+describe('planUrlaubSpan — a span that fits within the remaining budget', () => {
+  it('marks every day of a two-week block, but only the ten weekdays cost a day', () => {
+    const plan = planUrlaubSpan({ ...TWO_WEEK_BLOCK, dayMetaByDay: new Map(), uebrig: 30 })
+
+    expect(plan.vacation).toHaveLength(14)
+    expect(plan.vacation[0]).toBe('2026-08-10')
+    expect(plan.vacation[13]).toBe('2026-08-23')
+    expect(plan.skipped).toEqual([])
+    expect(plan.gleitzeittag).toEqual([])
+    expect(plan.kosten).toBe(10)
+    expect(plan.uebrigDanach).toBe(20)
+  })
+
+  it('reports the span it actually covers', () => {
+    const plan = planUrlaubSpan({ ...TWO_WEEK_BLOCK, dayMetaByDay: new Map(), uebrig: 30 })
+    expect(plan.start).toBe('2026-08-10')
+    expect(plan.end).toBe('2026-08-23')
+  })
+
+  it('writes nothing — the labels it was given come back untouched', () => {
+    const labels = mkMetaMap(mkMeta('2026-08-13', 'holiday'))
+    planUrlaubSpan({ ...TWO_WEEK_BLOCK, dayMetaByDay: labels, uebrig: 30 })
+    expect([...labels.values()]).toEqual([mkMeta('2026-08-13', 'holiday')])
+  })
+
+  it('a day inside the span that is not in the map is an ordinary work day and becomes Urlaub', () => {
+    const plan = planUrlaubSpan({
+      start: '2026-08-10',
+      end: '2026-08-12',
+      dayMetaByDay: mkMetaMap(mkMeta('2026-08-11', 'work')),
+      uebrig: 30,
+    })
+    // An explicit `work` row is not a label in the rule-1 sense — it is
+    // overwritten exactly like a day that carries no row at all.
+    expect(plan.vacation).toEqual(['2026-08-10', '2026-08-11', '2026-08-12'])
+    expect(plan.skipped).toEqual([])
+    expect(plan.kosten).toBe(3)
+  })
+})
+
+describe('planUrlaubSpan — a single-day span', () => {
+  it('a single weekday becomes Urlaub and costs one day', () => {
+    const plan = planUrlaubSpan({
+      start: '2026-08-11',
+      end: '2026-08-11',
+      dayMetaByDay: new Map(),
+      uebrig: 30,
+    })
+    expect(plan.vacation).toEqual(['2026-08-11'])
+    expect(plan.kosten).toBe(1)
+    expect(plan.uebrigDanach).toBe(29)
+  })
+
+  it('a single weekend day becomes Urlaub and costs nothing', () => {
+    const plan = planUrlaubSpan({
+      start: '2026-08-15', // Sa
+      end: '2026-08-15',
+      dayMetaByDay: new Map(),
+      uebrig: 30,
+    })
+    expect(plan.vacation).toEqual(['2026-08-15'])
+    expect(plan.kosten).toBe(0)
+    expect(plan.uebrigDanach).toBe(30)
+  })
+
+  it('a single day that already carries a label is skipped, leaving nothing to write', () => {
+    const plan = planUrlaubSpan({
+      start: '2026-08-11',
+      end: '2026-08-11',
+      dayMetaByDay: mkMetaMap(mkMeta('2026-08-11', 'sick')),
+      uebrig: 30,
+    })
+    expect(plan.vacation).toEqual([])
+    expect(plan.skipped).toEqual([{ date: '2026-08-11', type: 'sick', reason: 'labeled' }])
+    expect(plan.kosten).toBe(0)
+  })
+})
+
+describe('planUrlaubSpan — start and end given in reverse order', () => {
+  it('plans the same span as the forward order', () => {
+    const forward = planUrlaubSpan({ ...TWO_WEEK_BLOCK, dayMetaByDay: new Map(), uebrig: 30 })
+    const reversed = planUrlaubSpan({
+      start: TWO_WEEK_BLOCK.end,
+      end: TWO_WEEK_BLOCK.start,
+      dayMetaByDay: new Map(),
+      uebrig: 30,
+    })
+    expect(reversed).toEqual(forward)
+  })
+
+  it('normalizes the reported span rather than echoing the order it was given', () => {
+    const plan = planUrlaubSpan({
+      start: '2026-08-23',
+      end: '2026-08-10',
+      dayMetaByDay: new Map(),
+      uebrig: 30,
+    })
+    expect(plan.start).toBe('2026-08-10')
+    expect(plan.end).toBe('2026-08-23')
+  })
+})
+
+describe('planUrlaubSpan — a day inside the span that already carries a label', () => {
+  it('a Feiertag keeps its label, is reported as skipped, and consumes no vacation day', () => {
+    const plan = planUrlaubSpan({
+      start: '2026-08-10', // Mo
+      end: '2026-08-14', // Fr
+      dayMetaByDay: mkMetaMap(mkMeta('2026-08-13', 'holiday')), // Do
+      uebrig: 30,
+    })
+    expect(plan.vacation).toEqual(['2026-08-10', '2026-08-11', '2026-08-12', '2026-08-14'])
+    expect(plan.skipped).toEqual([{ date: '2026-08-13', type: 'holiday', reason: 'labeled' }])
+    expect(plan.kosten).toBe(4)
+    expect(plan.uebrigDanach).toBe(26)
+  })
+
+  describe('every non-work label is skipped and keeps what it has', () => {
+    const labels: Exclude<DayType, 'work'>[] = ['vacation', 'sick', 'holiday', 'gleitzeittag']
+    for (const type of labels) {
+      it(`${type} is skipped and costs nothing`, () => {
+        const plan = planUrlaubSpan({
+          start: '2026-08-10',
+          end: '2026-08-12',
+          dayMetaByDay: mkMetaMap(mkMeta('2026-08-11', type)),
+          uebrig: 30,
+        })
+        expect(plan.vacation).toEqual(['2026-08-10', '2026-08-12'])
+        expect(plan.skipped).toEqual([{ date: '2026-08-11', type, reason: 'labeled' }])
+        expect(plan.kosten).toBe(2)
+      })
+    }
+  })
+
+  it('a day already labeled Urlaub is not counted a second time', () => {
+    const plan = planUrlaubSpan({
+      start: '2026-08-10',
+      end: '2026-08-14',
+      dayMetaByDay: mkMetaMap(mkMeta('2026-08-10', 'vacation'), mkMeta('2026-08-11', 'vacation')),
+      uebrig: 30,
+    })
+    // Those two days are already drawn from the Urlaubskonto, so re-marking
+    // them would double-charge a budget they have already been paid out of.
+    expect(plan.kosten).toBe(3)
+    expect(plan.uebrigDanach).toBe(27)
+  })
+
+  it('reports skipped days in calendar order alongside the days to be written', () => {
+    const plan = planUrlaubSpan({
+      start: '2026-08-10',
+      end: '2026-08-14',
+      dayMetaByDay: mkMetaMap(mkMeta('2026-08-13', 'holiday'), mkMeta('2026-08-11', 'sick')),
+      uebrig: 30,
+    })
+    expect(plan.skipped.map((s) => s.date)).toEqual(['2026-08-11', '2026-08-13'])
+  })
+})
+
+describe('planUrlaubSpan — weekends inside the span', () => {
+  it('become Urlaub so the whole period reads as time away', () => {
+    const plan = planUrlaubSpan({
+      start: '2026-08-14', // Fr
+      end: '2026-08-17', // Mo
+      dayMetaByDay: new Map(),
+      uebrig: 30,
+    })
+    expect(plan.vacation).toEqual(['2026-08-14', '2026-08-15', '2026-08-16', '2026-08-17'])
+  })
+
+  it('never reduce übrig — a weekend-only span costs nothing even at zero budget', () => {
+    const plan = planUrlaubSpan({
+      start: '2026-08-15', // Sa
+      end: '2026-08-16', // So
+      dayMetaByDay: new Map(),
+      uebrig: 0,
+    })
+    expect(plan.vacation).toEqual(['2026-08-15', '2026-08-16'])
+    expect(plan.kosten).toBe(0)
+    expect(plan.uebrigDanach).toBe(0)
+  })
+
+  it('a labeled weekend day is still skipped and keeps its label', () => {
+    const plan = planUrlaubSpan({
+      start: '2026-08-14',
+      end: '2026-08-17',
+      dayMetaByDay: mkMetaMap(mkMeta('2026-08-15', 'holiday')),
+      uebrig: 30,
+    })
+    expect(plan.vacation).toEqual(['2026-08-14', '2026-08-16', '2026-08-17'])
+    expect(plan.skipped).toEqual([{ date: '2026-08-15', type: 'holiday', reason: 'labeled' }])
+    expect(plan.kosten).toBe(2)
   })
 })

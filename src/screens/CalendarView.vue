@@ -22,10 +22,13 @@ import {
 import { isLabeledType } from '@/domain/calc'
 import { THIRTY_MIN } from '@/domain/constants'
 import type { DayType } from '@/domain/types'
+import { planUrlaubSpan } from '@/domain/vacation'
+import type { UrlaubSpanPlan } from '@/domain/vacation'
 import DayDetail from '@/components/DayDetail.vue'
 import HeatCell from '@/components/HeatCell.vue'
 import CalendarLegend from '@/components/CalendarLegend.vue'
 import StatTile from '@/components/StatTile.vue'
+import UrlaubSpanConfirm from '@/components/UrlaubSpanConfirm.vue'
 
 type DayTone =
   | 'empty'
@@ -83,12 +86,15 @@ function goToday(): void {
  * on-target → over) for an ordinary work day.
  */
 function toneFor(date: string): DayTone {
-  const start = store.settings.value.balanceStartDate
-  if (date < start || date > today.value) return 'muted'
-
   const derivation = store.derivedDays.value.get(date)
   const type: DayType = derivation?.type ?? store.dayMetaByDay.value.get(date)?.type ?? 'work'
+  // An explicit label wins even outside [balanceStartDate..today]: vacation
+  // marked for next month is `verplant` in the Urlaubskonto, so a span planned
+  // ahead — weekends included — has to read as time away in the grid too.
   if (type !== 'work') return type
+
+  const start = store.settings.value.balanceStartDate
+  if (date < start || date > today.value) return 'muted'
 
   if (isWeekend(date)) return 'weekend'
 
@@ -103,16 +109,16 @@ function toneFor(date: string): DayTone {
 /** Native title/aria-label: the day heading plus a short status, never gating info behind it. */
 function titleFor(date: string, tone: DayTone): string {
   const heading = formatDayHeading(date)
-  if (tone === 'muted') return heading
   const derivation = store.derivedDays.value.get(date)
-  if (!derivation) return heading
-  const hours = `${formatDuration(derivation.netWorkSeconds)} von ${formatDuration(derivation.expectedSeconds)}`
-  const type = derivation.type
-  if (type === 'work') return `${heading} · ${hours}`
+  const type: DayType = derivation?.type ?? store.dayMetaByDay.value.get(date)?.type ?? 'work'
   // A credited day's hours are meaningless (the label zeroes them out); a
   // Gleitzeittag's are not — it carries a target and counts what was worked.
-  if (isLabeledType(type)) return `${heading} · ${DAY_TYPE_LABEL_DE[type]}`
-  return `${heading} · ${DAY_TYPE_LABEL_DE[type]} · ${hours}`
+  if (type !== 'work') {
+    if (isLabeledType(type) || !derivation) return `${heading} · ${DAY_TYPE_LABEL_DE[type]}`
+    return `${heading} · ${DAY_TYPE_LABEL_DE[type]} · ${formatDuration(derivation.netWorkSeconds)} von ${formatDuration(derivation.expectedSeconds)}`
+  }
+  if (tone === 'muted' || !derivation) return heading
+  return `${heading} · ${formatDuration(derivation.netWorkSeconds)} von ${formatDuration(derivation.expectedSeconds)}`
 }
 
 const gridCells = computed<CellData[]>(() =>
@@ -150,14 +156,71 @@ function formatTage(tage: number): string {
 
 const selectedDate = ref<string | null>(null)
 
-function onSelectDay(date: string): void {
-  selectedDate.value = date
-}
 function onCloseDetail(): void {
   selectedDate.value = null
 }
+
+// ---------------------------------------------------------------------
+// Marking a span as Urlaub
+// ---------------------------------------------------------------------
+//
+// Span selection extends the existing tap-to-select rather than replacing it:
+// the same day tap either opens DayDetail (normal mode) or picks an end of the
+// span (span mode). Two taps bound the span — the first sets the anchor, the
+// second opens the confirmation — so the same gesture works on touch, and
+// tapping the anchor twice is simply a single-day span.
+
+const spanMode = ref(false)
+const spanAnchor = ref<string | null>(null)
+/** The plan awaiting confirmation. Non-null ⇒ the confirmation is on screen. */
+const pendingPlan = ref<UrlaubSpanPlan | null>(null)
+
+function startSpanMode(): void {
+  spanMode.value = true
+  spanAnchor.value = null
+  selectedDate.value = null
+}
+
+/** Leaves span mode and drops the pending plan — writing nothing at all. */
+function cancelSpanMode(): void {
+  spanMode.value = false
+  spanAnchor.value = null
+  pendingPlan.value = null
+}
+
+function onSelectDay(date: string): void {
+  if (!spanMode.value) {
+    selectedDate.value = date
+    return
+  }
+  if (spanAnchor.value === null) {
+    spanAnchor.value = date
+    return
+  }
+  // Which Urlaubsjahr's budget a span draws on is the caller's question (the
+  // module takes übrig as a number): use the year the span starts in. A span
+  // crossing a year boundary is out of scope.
+  const [from, to] =
+    spanAnchor.value <= date ? [spanAnchor.value, date] : [date, spanAnchor.value]
+  pendingPlan.value = planUrlaubSpan({
+    start: from,
+    end: to,
+    dayMetaByDay: store.dayMetaByDay.value,
+    uebrig: store.urlaubskontoFor.value(yearKey(from)).uebrig,
+  })
+}
+
+async function onConfirmSpan(): Promise<void> {
+  const plan = pendingPlan.value
+  if (!plan) return
+  await store.applyUrlaubSpanPlan(plan)
+  cancelSpanMode()
+}
+
 function onKeydown(e: KeyboardEvent): void {
-  if (e.key === 'Escape') onCloseDetail()
+  if (e.key !== 'Escape') return
+  if (spanMode.value) cancelSpanMode()
+  else onCloseDetail()
 }
 onMounted(() => window.addEventListener('keydown', onKeydown))
 onUnmounted(() => window.removeEventListener('keydown', onKeydown))
@@ -188,6 +251,7 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
           :tone="cell.tone"
           :in-month="cell.inMonth"
           :is-today="cell.isToday"
+          :is-span-anchor="cell.date === spanAnchor"
           :title="cell.title"
           @select="onSelectDay"
         />
@@ -208,6 +272,16 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
         <StatTile label="Verplant" :value="formatTage(urlaubskonto.verplant)" />
         <StatTile label="Genommen" :value="formatTage(urlaubskonto.genommen)" />
       </div>
+
+      <button v-if="!spanMode" class="btn btn-block span-btn" type="button" @click="startSpanMode">
+        Zeitraum als Urlaub eintragen
+      </button>
+      <template v-else>
+        <p class="faint span-hint">
+          {{ spanAnchor === null ? 'Ersten Tag antippen.' : 'Letzten Tag antippen.' }}
+        </p>
+        <button class="btn btn-ghost btn-block" type="button" @click="cancelSpanMode">Abbrechen</button>
+      </template>
     </section>
 
     <CalendarLegend />
@@ -222,6 +296,13 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
         <DayDetail :date="selectedDate ?? ''" />
       </div>
     </div>
+
+    <UrlaubSpanConfirm
+      v-if="pendingPlan"
+      :plan="pendingPlan"
+      @confirm="onConfirmSpan"
+      @cancel="cancelSpanMode"
+    />
   </section>
 </template>
 
@@ -312,6 +393,14 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 8px;
+}
+.span-btn {
+  border-style: dashed;
+}
+.span-hint {
+  margin: 0;
+  font-size: 12.5px;
+  text-align: center;
 }
 
 .overlay {

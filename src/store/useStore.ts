@@ -21,7 +21,7 @@ import type {
 import { dayKeyFromMs, enumerateDays, isWeekend, todayKey } from '@/domain/time'
 import { deriveDay, deriveRange } from '@/domain/calc'
 import { deriveUrlaubskonto, urlaubsanspruchFor } from '@/domain/vacation'
-import type { Urlaubskonto } from '@/domain/vacation'
+import type { UrlaubSpanPlan, Urlaubskonto } from '@/domain/vacation'
 import {
   DEFAULT_BALANCE_START_DATE,
   DEFAULT_DAILY_TARGET_SECONDS,
@@ -409,6 +409,30 @@ async function clearDayType(date: string): Promise<void> {
   if (idx !== -1) dayMeta.value.splice(idx, 1)
 }
 
+/**
+ * Applies an already-confirmed span plan as a batch of day-label writes.
+ *
+ * A thin pass-through: which day gets which label was decided entirely by
+ * `planUrlaubSpan`, and nothing here re-reads or second-guesses it. Days the
+ * plan skipped are simply absent from both buckets, so they keep what they
+ * have. Until this is called nothing has been written, which is what makes
+ * cancelling the confirmation free.
+ *
+ * Both buckets are applied even though the Gleitzeittag one is always empty
+ * today — so that filling it needs no change here.
+ */
+async function applyUrlaubSpanPlan(plan: UrlaubSpanPlan): Promise<void> {
+  const write = async (dates: readonly string[], type: DayType): Promise<void> => {
+    for (const date of dates) {
+      // Carry any note the day already had: only unlabeled/`work` days reach
+      // here, and re-labeling one should not silently drop what the user wrote.
+      await setDayType(date, type, dayMetaByDay.value.get(date)?.note ?? '')
+    }
+  }
+  await write(plan.vacation, 'vacation')
+  await write(plan.gleitzeittag, 'gleitzeittag')
+}
+
 async function updateSettings(
   patch: Partial<
     Pick<
@@ -537,6 +561,7 @@ const store = {
   deleteSession,
   setDayType,
   clearDayType,
+  applyUrlaubSpanPlan,
   updateSettings,
   applyReconciliation,
   exportBackup,

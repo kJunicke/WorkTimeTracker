@@ -24,9 +24,11 @@ const props = withDefaults(
     tone: DayTone
     inMonth?: boolean
     isToday?: boolean
+    /** This cell is the first end of a span the user is currently picking. */
+    isSpanAnchor?: boolean
     title?: string
   }>(),
-  { inMonth: true, isToday: false, title: '' },
+  { inMonth: true, isToday: false, isSpanAnchor: false, title: '' },
 )
 
 const emit = defineEmits<{
@@ -56,7 +58,8 @@ function onClick(): void {
   <button
     type="button"
     class="heat-cell"
-    :class="[`tone-${tone}`, { 'out-month': !inMonth, today: isToday }]"
+    :class="[`tone-${tone}`, { 'out-month': !inMonth, today: isToday, 'span-anchor': isSpanAnchor }]"
+    :aria-pressed="isSpanAnchor ? true : undefined"
     :title="title || undefined"
     :aria-label="title || undefined"
     @click="onClick"
@@ -142,5 +145,12 @@ function onClick(): void {
 .today {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
+}
+
+/* Marks the day the span started from, in the Urlaub colour it would become. */
+.span-anchor {
+  outline: 3px solid var(--vacation);
+  outline-offset: -2px;
+  opacity: 1;
 }
 </style>
