@@ -334,4 +334,26 @@ describe('reactive proxies are normalized before hitting IndexedDB', () => {
     const db = await getDb()
     expect(isReactive(await db.get('settings', SETTINGS_KEY))).toBe(false)
   })
+
+  // `reactive()` is DEEP: the nested override map is its own Proxy, so copying
+  // the settings object field-by-field still hands structured-clone a Proxy
+  // unless the map is copied too. The test above cannot catch this — its
+  // fixture has no nested object at all.
+  it('putSettings stores a plain per-year Urlaubsanspruch map', async () => {
+    const proxy = reactive<Settings>({
+      dailyTargetSeconds: 1,
+      balanceStartDate: '2026-01-01',
+      schemaVersion: SCHEMA_VERSION,
+      createdAt: 2,
+      onboarded: true,
+      urlaubsanspruchStandard: 30,
+      urlaubsanspruchByYear: { '2026': 19 },
+    })
+    await putSettings(proxy)
+
+    const db = await getDb()
+    const stored = await db.get('settings', SETTINGS_KEY)
+    expect(isReactive(stored?.urlaubsanspruchByYear)).toBe(false)
+    expect(stored?.urlaubsanspruchByYear).toEqual({ '2026': 19 })
+  })
 })

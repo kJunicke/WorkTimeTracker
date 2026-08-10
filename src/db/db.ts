@@ -45,20 +45,27 @@ export function toStoredDayMeta(meta: DayMeta): DayMeta {
   return { date: meta.date, type: meta.type, note: meta.note }
 }
 
-/** Same structured-clone protection for the single settings record. */
+/**
+ * Same structured-clone protection for the single settings record.
+ *
+ * Spread rather than a hand-listed whitelist, matching `toStoredSession`: a
+ * whitelist has to be kept in step with `Settings` by hand, and a field it
+ * forgets is dropped on EVERY persist, not just the release that added it.
+ * The Urlaubsanspruch figures are hand-typed and cannot be re-derived from
+ * anything else on disk, so that failure would be unrecoverable and silent.
+ *
+ * `reactive()` is DEEP, so the top-level spread is not enough on its own —
+ * `urlaubsanspruchByYear` is a Proxy of its own and needs copying too, or
+ * structured-clone still throws. Kept `undefined` when absent rather than
+ * defaulted to `{}`: the field is optional-with-default on read, and writing
+ * an empty map here would claim the user had configured one.
+ */
 export function toStoredSettings(settings: Settings): Settings {
   return {
-    dailyTargetSeconds: settings.dailyTargetSeconds,
-    balanceStartDate: settings.balanceStartDate,
-    schemaVersion: settings.schemaVersion,
-    createdAt: settings.createdAt,
-    onboarded: settings.onboarded,
-    // Urlaubsanspruch figures are hand-typed and cannot be re-derived from any
-    // other stored data, so this whitelist is the one place that must be kept
-    // in step with `Settings` — a field missing here is silently dropped on
-    // every persist, not just on the one that added it.
-    urlaubsanspruchStandard: settings.urlaubsanspruchStandard,
-    urlaubsanspruchByYear: settings.urlaubsanspruchByYear,
+    ...settings,
+    urlaubsanspruchByYear: settings.urlaubsanspruchByYear
+      ? { ...settings.urlaubsanspruchByYear }
+      : undefined,
   }
 }
 
