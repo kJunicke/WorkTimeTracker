@@ -45,6 +45,23 @@ export interface Settings {
    * existed simply lacks it — callers MUST treat a missing value as `false`.
    */
   onboarded: boolean
+  /**
+   * Standard Urlaubsanspruch in whole days, covering every Urlaubsjahr without
+   * an override. Optional for the same reason as `onboarded` above — a
+   * settings record persisted before this field existed simply lacks it — but
+   * spelled optional here because nothing normalizes it on load: callers MUST
+   * read it through the domain vacation module, which applies
+   * `DEFAULT_URLAUBSANSPRUCH`.
+   */
+  urlaubsanspruchStandard?: number
+  /**
+   * Sparse per-Urlaubsjahr overrides of `urlaubsanspruchStandard`, keyed by
+   * four-digit year ("2026"). A year absent from the map inherits the standard
+   * figure — which is also why removing an override returns that year to the
+   * standard rather than setting it to zero. Optional-with-default on read,
+   * like `urlaubsanspruchStandard`.
+   */
+  urlaubsanspruchByYear?: Record<string, number>
 }
 
 /** Timer machine state, derived from the open session (HANDOFF §3.2). */
@@ -78,6 +95,10 @@ export interface BackupFile {
   settings: {
     dailyTargetSeconds: number
     balanceStartDate: string
+    /** Additive since the Urlaubskonto feature; absent in older files (§6 stays at version 1). */
+    urlaubsanspruchStandard?: number
+    /** Additive since the Urlaubskonto feature; absent in older files (§6 stays at version 1). */
+    urlaubsanspruchByYear?: Record<string, number>
   }
   sessions: Session[]
   dayMeta: DayMeta[]

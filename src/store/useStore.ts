@@ -20,9 +20,12 @@ import type {
 } from '@/domain/types'
 import { dayKeyFromMs, enumerateDays, isWeekend, todayKey } from '@/domain/time'
 import { deriveDay, deriveRange } from '@/domain/calc'
+import { deriveUrlaubskonto, urlaubsanspruchFor } from '@/domain/vacation'
+import type { Urlaubskonto } from '@/domain/vacation'
 import {
   DEFAULT_BALANCE_START_DATE,
   DEFAULT_DAILY_TARGET_SECONDS,
+  DEFAULT_URLAUBSANSPRUCH,
   SCHEMA_VERSION,
   TWELVE_HOURS,
 } from '@/domain/constants'
@@ -61,6 +64,8 @@ const settings = ref<Settings>({
   schemaVersion: SCHEMA_VERSION,
   createdAt: Date.now(),
   onboarded: false,
+  urlaubsanspruchStandard: DEFAULT_URLAUBSANSPRUCH,
+  urlaubsanspruchByYear: {},
 })
 const pendingReconciliation = ref<PendingReconciliation | null>(null)
 
@@ -212,6 +217,25 @@ const unlabeledPastWeekdays = computed<string[]>(() => {
 const needsOnboarding = computed<boolean>(
   () => !settings.value.onboarded && sessions.value.length === 0 && dayMeta.value.length === 0,
 )
+
+/**
+ * The Urlaubskonto of any Urlaubsjahr ("2026") — a thin pass-through over
+ * `@/domain/vacation`, which owns every rule. A computed *returning a
+ * function* rather than a plain function so that callers stay reactive to the
+ * day labels, the entitlement settings and the rollover of today.
+ */
+const urlaubskontoFor = computed(() => {
+  const labels = dayMeta.value
+  const entitlement = settings.value
+  const today = todayKey(now.value)
+  return (urlaubsjahr: string): Urlaubskonto =>
+    deriveUrlaubskonto({
+      urlaubsjahr,
+      dayMeta: labels,
+      anspruch: urlaubsanspruchFor(urlaubsjahr, entitlement),
+      today,
+    })
+})
 
 // ---------------------------------------------------------------------------
 // Actions
@@ -386,7 +410,12 @@ async function clearDayType(date: string): Promise<void> {
 }
 
 async function updateSettings(
-  patch: Partial<Pick<Settings, 'dailyTargetSeconds' | 'balanceStartDate'>>,
+  patch: Partial<
+    Pick<
+      Settings,
+      'dailyTargetSeconds' | 'balanceStartDate' | 'urlaubsanspruchStandard' | 'urlaubsanspruchByYear'
+    >
+  >,
 ): Promise<void> {
   const updated: Settings = { ...settings.value, ...patch }
   await repo.putSettings(updated)
@@ -437,6 +466,10 @@ async function importBackup(data: BackupData, mode: 'replace' | 'merge'): Promis
       schemaVersion: SCHEMA_VERSION,
       createdAt: Date.now(),
       onboarded: true,
+      // Hand-typed and not re-derivable, so a restore must carry them through.
+      // `parseBackup` has already defaulted them for a file predating the fields.
+      urlaubsanspruchStandard: data.settings.urlaubsanspruchStandard,
+      urlaubsanspruchByYear: data.settings.urlaubsanspruchByYear,
     }
     // One atomic transaction (see repo.replaceAllData): the in-memory refs are
     // updated ONLY after it resolves, so a failed/aborted write throws to the
@@ -492,6 +525,7 @@ const store = {
   todayDerivation,
   unlabeledPastWeekdays,
   needsOnboarding,
+  urlaubskontoFor,
   // actions
   init,
   startWork,

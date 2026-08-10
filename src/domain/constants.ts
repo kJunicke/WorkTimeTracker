@@ -20,3 +20,10 @@ export const SCHEMA_VERSION = 1
  */
 export const DEFAULT_DAILY_TARGET_SECONDS = 21300
 export const DEFAULT_BALANCE_START_DATE = '2026-05-06'
+
+/**
+ * Standard Urlaubsanspruch in whole days per Urlaubsjahr, used until the user
+ * sets their own (and for a settings record persisted before the field
+ * existed). 30 is the common German full-time figure.
+ */
+export const DEFAULT_URLAUBSANSPRUCH = 30

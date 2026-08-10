@@ -110,6 +110,14 @@ export function monthKey(dateKey: string): string {
   return dateKey.slice(0, 7)
 }
 
+/**
+ * Calendar year ("YYYY") a day key ("YYYY-MM-DD") or month key ("YYYY-MM")
+ * belongs to — i.e. the Urlaubsjahr a date falls in.
+ */
+export function yearKey(dateOrMonthKey: string): string {
+  return dateOrMonthKey.slice(0, 4)
+}
+
 // ---------------------------------------------------------------------------
 // Display helpers added in wave 3 (History screen — CLAUDE.md domain/time.ts
 // contract: "display helpers as needed"). Additive only.

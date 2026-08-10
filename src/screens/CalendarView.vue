@@ -17,6 +17,7 @@ import {
   monthGridDays,
   monthKey,
   todayKey,
+  yearKey,
 } from '@/domain/time'
 import { isLabeledType } from '@/domain/calc'
 import { THIRTY_MIN } from '@/domain/constants'
@@ -24,6 +25,7 @@ import type { DayType } from '@/domain/types'
 import DayDetail from '@/components/DayDetail.vue'
 import HeatCell from '@/components/HeatCell.vue'
 import CalendarLegend from '@/components/CalendarLegend.vue'
+import StatTile from '@/components/StatTile.vue'
 
 type DayTone =
   | 'empty'
@@ -128,6 +130,21 @@ const gridCells = computed<CellData[]>(() =>
 )
 
 // ---------------------------------------------------------------------
+// Urlaubskonto for the displayed month's Urlaubsjahr
+// ---------------------------------------------------------------------
+
+// Scoped to the month on screen, so paging from Dezember into Januar swings
+// the counter to the next Urlaubsjahr. All three figures come straight from
+// the domain module — nothing is decided here.
+const urlaubsjahr = computed<string>(() => yearKey(viewMonth.value))
+const urlaubskonto = computed(() => store.urlaubskontoFor.value(urlaubsjahr.value))
+
+/** "12 Tage" / "1 Tag" — the Urlaubskonto counts whole days, never hours. */
+function formatTage(tage: number): string {
+  return `${tage} ${Math.abs(tage) === 1 ? 'Tag' : 'Tage'}`
+}
+
+// ---------------------------------------------------------------------
 // Tap-to-open day detail (reuses DayDetail — full session/label editing)
 // ---------------------------------------------------------------------
 
@@ -174,6 +191,22 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
           :title="cell.title"
           @select="onSelectDay"
         />
+      </div>
+    </section>
+
+    <section class="card urlaubskonto-card">
+      <header class="urlaubskonto-head">
+        <h3>Urlaubskonto {{ urlaubsjahr }}</h3>
+        <span class="muted anspruch">Anspruch: {{ formatTage(urlaubskonto.anspruch) }}</span>
+      </header>
+      <div class="urlaubskonto-stats">
+        <StatTile
+          label="Übrig"
+          :value="formatTage(urlaubskonto.uebrig)"
+          :tone="urlaubskonto.uebrig < 0 ? 'under' : 'default'"
+        />
+        <StatTile label="Verplant" :value="formatTage(urlaubskonto.verplant)" />
+        <StatTile label="Genommen" :value="formatTage(urlaubskonto.genommen)" />
       </div>
     </section>
 
@@ -259,6 +292,26 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
   grid-template-columns: repeat(7, 1fr);
   gap: 4px;
   margin-top: 6px;
+}
+
+.urlaubskonto-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.urlaubskonto-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.anspruch {
+  font-size: 12px;
+}
+.urlaubskonto-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
 }
 
 .overlay {

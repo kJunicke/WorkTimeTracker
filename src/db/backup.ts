@@ -3,6 +3,8 @@
 // SettingsView wires file save/load around them.
 
 import type { BackupFile, DayMeta, DayType, Session, SessionKind } from '@/domain/types'
+import type { UrlaubsanspruchSettings } from '@/domain/vacation'
+import { resolveUrlaubsanspruchSettings } from '@/domain/vacation'
 
 /** The JSON backup FILE FORMAT version (HANDOFF §6) — independent of the
  *  IndexedDB `SCHEMA_VERSION` in `domain/constants.ts`, even though both
@@ -24,18 +26,27 @@ function toCanonicalDayMeta(m: DayMeta): DayMeta {
   return { date: m.date, type: m.type, note: m.note }
 }
 
-/** Builds the exact §6 JSON shape from the current in-memory state. */
+/**
+ * Builds the exact §6 JSON shape from the current in-memory state. The
+ * Urlaubsanspruch figures are hand-typed and cannot be re-derived from
+ * anything else in the file, so they always go in — resolved through the
+ * domain module, so a settings record predating them still exports a usable
+ * figure rather than `undefined`.
+ */
 export function buildBackup(args: {
-  settings: { dailyTargetSeconds: number; balanceStartDate: string }
+  settings: { dailyTargetSeconds: number; balanceStartDate: string } & UrlaubsanspruchSettings
   sessions: Session[]
   dayMeta: DayMeta[]
 }): BackupFile {
+  const urlaub = resolveUrlaubsanspruchSettings(args.settings)
   return {
     schemaVersion: CURRENT_SCHEMA_VERSION,
     exportedAt: new Date().toISOString(),
     settings: {
       dailyTargetSeconds: args.settings.dailyTargetSeconds,
       balanceStartDate: args.settings.balanceStartDate,
+      urlaubsanspruchStandard: urlaub.urlaubsanspruchStandard,
+      urlaubsanspruchByYear: urlaub.urlaubsanspruchByYear,
     },
     sessions: args.sessions.map(toCanonicalSession),
     dayMeta: args.dayMeta.map(toCanonicalDayMeta),
@@ -44,7 +55,13 @@ export function buildBackup(args: {
 
 /** The validated, ready-to-use payload of a successfully parsed backup file. */
 export interface BackupData {
-  settings: { dailyTargetSeconds: number; balanceStartDate: string }
+  settings: {
+    dailyTargetSeconds: number
+    balanceStartDate: string
+    /** Already defaulted by `parseBackup` — a file predating these fields still yields usable figures. */
+    urlaubsanspruchStandard: number
+    urlaubsanspruchByYear: Record<string, number>
+  }
   sessions: Session[]
   dayMeta: DayMeta[]
 }
@@ -76,6 +93,12 @@ function isValidDayMeta(value: unknown): value is DayMeta {
     DAY_TYPES.has(value.type as DayType) &&
     typeof value.note === 'string'
   )
+}
+
+/** A sparse "YYYY" -> days map: a plain object whose every value is a number. */
+function isValidYearMap(value: unknown): value is Record<string, number> {
+  if (!isPlainObject(value)) return false
+  return Object.values(value).every((v) => typeof v === 'number')
 }
 
 /** Validates every element of an unknown array against a type guard; `null` if any element fails. */
@@ -116,6 +139,22 @@ export function parseBackup(text: string): ParseBackupResult {
     return { ok: false, error: 'Backup enthält keine gültigen Einstellungen.' }
   }
 
+  // Additive since the Urlaubskonto feature: absent in an older file, so read
+  // as optional-with-default. Present-but-wrong-typed is still a malformed
+  // file and is rejected like any other settings field.
+  const standardRaw = settingsRaw.urlaubsanspruchStandard
+  const byYearRaw = settingsRaw.urlaubsanspruchByYear
+  if (
+    (standardRaw !== undefined && typeof standardRaw !== 'number') ||
+    (byYearRaw !== undefined && !isValidYearMap(byYearRaw))
+  ) {
+    return { ok: false, error: 'Backup enthält keinen gültigen Urlaubsanspruch.' }
+  }
+  const urlaub = resolveUrlaubsanspruchSettings({
+    urlaubsanspruchStandard: standardRaw,
+    urlaubsanspruchByYear: byYearRaw as Record<string, number> | undefined,
+  })
+
   const sessions = parseArray(parsed.sessions, isValidSession)
   if (!sessions) {
     return { ok: false, error: 'Backup enthält fehlerhafte Sitzungsdaten.' }
@@ -132,6 +171,8 @@ export function parseBackup(text: string): ParseBackupResult {
       settings: {
         dailyTargetSeconds: settingsRaw.dailyTargetSeconds,
         balanceStartDate: settingsRaw.balanceStartDate,
+        urlaubsanspruchStandard: urlaub.urlaubsanspruchStandard,
+        urlaubsanspruchByYear: urlaub.urlaubsanspruchByYear,
       },
       sessions,
       dayMeta,

@@ -1,6 +1,11 @@
 import { buildBackup, parseBackup } from './backup'
 import type { Session, DayMeta, Settings } from '@/domain/types'
-import { DEFAULT_BALANCE_START_DATE, DEFAULT_DAILY_TARGET_SECONDS, SCHEMA_VERSION } from '@/domain/constants'
+import {
+  DEFAULT_BALANCE_START_DATE,
+  DEFAULT_DAILY_TARGET_SECONDS,
+  DEFAULT_URLAUBSANSPRUCH,
+  SCHEMA_VERSION,
+} from '@/domain/constants'
 
 function mkSettings(overrides: Partial<Settings> = {}): Settings {
   return {
@@ -9,6 +14,8 @@ function mkSettings(overrides: Partial<Settings> = {}): Settings {
     schemaVersion: SCHEMA_VERSION,
     createdAt: Date.now(),
     onboarded: true,
+    urlaubsanspruchStandard: 30,
+    urlaubsanspruchByYear: {},
     ...overrides,
   }
 }
@@ -36,7 +43,12 @@ describe('buildBackup', () => {
     expect(backup.schemaVersion).toBe(1)
     expect(typeof backup.exportedAt).toBe('string')
     expect(Number.isNaN(Date.parse(backup.exportedAt))).toBe(false)
-    expect(backup.settings).toEqual({ dailyTargetSeconds: 21300, balanceStartDate: '2026-05-06' })
+    expect(backup.settings).toEqual({
+      dailyTargetSeconds: 21300,
+      balanceStartDate: '2026-05-06',
+      urlaubsanspruchStandard: 30,
+      urlaubsanspruchByYear: {},
+    })
     expect(backup.sessions).toEqual(sessions)
     expect(backup.dayMeta).toEqual(dayMeta)
   })
@@ -48,9 +60,23 @@ describe('buildBackup', () => {
     expect(backup.sessions[0]).toEqual(mkSession())
   })
 
-  it('only carries dailyTargetSeconds/balanceStartDate from settings (not schemaVersion/createdAt/onboarded)', () => {
+  it('only carries the user-set settings (not schemaVersion/createdAt/onboarded)', () => {
     const backup = buildBackup({ settings: mkSettings(), sessions: [], dayMeta: [] })
-    expect(Object.keys(backup.settings).sort()).toEqual(['balanceStartDate', 'dailyTargetSeconds'])
+    expect(Object.keys(backup.settings).sort()).toEqual([
+      'balanceStartDate',
+      'dailyTargetSeconds',
+      'urlaubsanspruchByYear',
+      'urlaubsanspruchStandard',
+    ])
+  })
+
+  it('defaults the Urlaubsanspruch figures when the settings record predates them', () => {
+    // Hand-typed figures cannot be re-derived, so the file always carries a
+    // usable one rather than `undefined`.
+    const settings = mkSettings({ urlaubsanspruchStandard: undefined, urlaubsanspruchByYear: undefined })
+    const backup = buildBackup({ settings, sessions: [], dayMeta: [] })
+    expect(backup.settings.urlaubsanspruchStandard).toBe(DEFAULT_URLAUBSANSPRUCH)
+    expect(backup.settings.urlaubsanspruchByYear).toEqual({})
   })
 })
 
@@ -65,9 +91,55 @@ describe('parseBackup', () => {
 
     expect(result.ok).toBe(true)
     if (!result.ok) throw new Error('expected ok:true')
-    expect(result.data.settings).toEqual({ dailyTargetSeconds: 18000, balanceStartDate: '2026-06-01' })
+    expect(result.data.settings).toEqual({
+      dailyTargetSeconds: 18000,
+      balanceStartDate: '2026-06-01',
+      urlaubsanspruchStandard: 30,
+      urlaubsanspruchByYear: {},
+    })
     expect(result.data.sessions).toEqual(sessions)
     expect(result.data.dayMeta).toEqual(dayMeta)
+  })
+
+  it('round-trips both Urlaubsanspruch fields, still at schemaVersion 1', () => {
+    const settings = mkSettings({
+      urlaubsanspruchStandard: 26,
+      urlaubsanspruchByYear: { '2026': 18, '2027': 24 },
+    })
+
+    const backup = buildBackup({ settings, sessions: [], dayMeta: [] })
+    expect(backup.schemaVersion).toBe(1)
+
+    const result = parseBackup(JSON.stringify(backup))
+    expect(result.ok).toBe(true)
+    if (!result.ok) throw new Error('expected ok:true')
+    expect(result.data.settings.urlaubsanspruchStandard).toBe(26)
+    expect(result.data.settings.urlaubsanspruchByYear).toEqual({ '2026': 18, '2027': 24 })
+  })
+
+  it('imports a backup written before the Urlaubsanspruch fields existed, applying the defaults', () => {
+    const backup = buildBackup({ settings: mkSettings(), sessions: [], dayMeta: [] })
+    const {
+      urlaubsanspruchStandard: _standard,
+      urlaubsanspruchByYear: _byYear,
+      ...oldSettings
+    } = backup.settings
+    const older = { ...backup, settings: oldSettings }
+
+    const result = parseBackup(JSON.stringify(older))
+    expect(result.ok).toBe(true)
+    if (!result.ok) throw new Error('expected ok:true')
+    expect(result.data.settings.urlaubsanspruchStandard).toBe(DEFAULT_URLAUBSANSPRUCH)
+    expect(result.data.settings.urlaubsanspruchByYear).toEqual({})
+  })
+
+  it('rejects a present-but-wrong-typed Urlaubsanspruch', () => {
+    const backup = buildBackup({ settings: mkSettings(), sessions: [], dayMeta: [] })
+    const badStandard = { ...backup, settings: { ...backup.settings, urlaubsanspruchStandard: '30' } }
+    expect(parseBackup(JSON.stringify(badStandard)).ok).toBe(false)
+
+    const badMap = { ...backup, settings: { ...backup.settings, urlaubsanspruchByYear: { '2026': 'viele' } } }
+    expect(parseBackup(JSON.stringify(badMap)).ok).toBe(false)
   })
 
   it('round-trips a gleitzeittag label (additive day type, still schemaVersion 1)', () => {
