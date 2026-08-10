@@ -19,9 +19,47 @@ export const SETTINGS_KEY = 'app'
  */
 export type StoredSession = Session & { dayKey: string }
 
-/** Builds the on-disk representation of a Session (adds the derived dayKey). */
+/**
+ * Builds the on-disk representation of a Session (adds the derived dayKey).
+ * The spread is also what makes this write-safe — see `toStoredDayMeta`.
+ */
 export function toStoredSession(session: Session): StoredSession {
   return { ...session, dayKey: dayKeyFromMs(session.startMs) }
+}
+
+/**
+ * Builds the on-disk representation of a DayMeta.
+ *
+ * It looks like a pointless copy — DayMeta is stored exactly as-is — but it is
+ * NOT optional. Anything reaching this layer may be a **Vue reactive proxy**:
+ * `ref(someObject).value` returns a `reactive()` Proxy, and IndexedDB's
+ * structured-clone algorithm cannot clone a Proxy. Writing one throws
+ * `DataCloneError: #<Object> could not be cloned` and aborts the whole
+ * transaction. Sessions were accidentally immune because `toStoredSession`
+ * spreads them into a plain object; day labels went in raw, which is why
+ * importing a backup containing Urlaub/Feiertag labels failed while the
+ * sessions in the same file looked fine. Normalize at the boundary so no
+ * caller has to know.
+ */
+export function toStoredDayMeta(meta: DayMeta): DayMeta {
+  return { date: meta.date, type: meta.type, note: meta.note }
+}
+
+/** Same structured-clone protection for the single settings record. */
+export function toStoredSettings(settings: Settings): Settings {
+  return {
+    dailyTargetSeconds: settings.dailyTargetSeconds,
+    balanceStartDate: settings.balanceStartDate,
+    schemaVersion: settings.schemaVersion,
+    createdAt: settings.createdAt,
+    onboarded: settings.onboarded,
+    // Urlaubsanspruch figures are hand-typed and cannot be re-derived from any
+    // other stored data, so this whitelist is the one place that must be kept
+    // in step with `Settings` — a field missing here is silently dropped on
+    // every persist, not just on the one that added it.
+    urlaubsanspruchStandard: settings.urlaubsanspruchStandard,
+    urlaubsanspruchByYear: settings.urlaubsanspruchByYear,
+  }
 }
 
 export interface ArbeitszeitDB extends DBSchema {

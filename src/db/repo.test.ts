@@ -15,6 +15,7 @@ import {
   replaceAllData,
   mergeImport,
 } from './repo'
+import { reactive, isReactive } from 'vue'
 import { getDb, SETTINGS_KEY } from './db'
 import { dayKeyFromMs } from '@/domain/time'
 import {
@@ -150,6 +151,22 @@ describe('putSettings', () => {
     await putSettings({ ...current, dailyTargetSeconds: 18000 })
     expect((await getSettings()).dailyTargetSeconds).toBe(18000)
   })
+
+  // `toStoredSettings` whitelists fields one by one, so a field it forgets is
+  // dropped on EVERY persist, not just the release that added it. The
+  // Urlaubsanspruch figures are hand-typed and cannot be re-derived from any
+  // other stored data, so losing them is unrecoverable — pin the round-trip.
+  it('round-trips the Urlaubsanspruch standard figure and its per-year overrides', async () => {
+    const current = await getSettings()
+    await putSettings({
+      ...current,
+      urlaubsanspruchStandard: 28,
+      urlaubsanspruchByYear: { '2026': 19 },
+    })
+    const reloaded = await getSettings()
+    expect(reloaded.urlaubsanspruchStandard).toBe(28)
+    expect(reloaded.urlaubsanspruchByYear).toEqual({ '2026': 19 })
+  })
 })
 
 describe('bulkImport', () => {
@@ -248,5 +265,73 @@ describe('mergeImport (backup "Zusammenführen")', () => {
     const dayMeta = await getAllDayMeta()
     expect(dayMeta).toHaveLength(2)
     expect(dayMeta).toContainEqual({ date: '2026-05-14', type: 'holiday', note: '' })
+  })
+})
+
+// ---------------------------------------------------------------------------
+// Structured-clone safety at the persistence boundary.
+//
+// Regression: importing a backup threw
+//   DataCloneError: Failed to execute 'put' on 'IDBObjectStore':
+//   #<Object> could not be cloned
+// because SettingsView holds the parsed backup in `ref(...)`, so `.value`
+// hands the repo Vue `reactive()` Proxies. IndexedDB cannot structured-clone a
+// Proxy. Sessions survived by luck (`toStoredSession` spreads them into a plain
+// object); day labels and settings went in raw and blew up the transaction —
+// which is why Urlaub/Feiertag never made it through an import.
+// ---------------------------------------------------------------------------
+describe('reactive proxies are normalized before hitting IndexedDB', () => {
+  it('putDayMeta stores a plain object', async () => {
+    const proxy = reactive<DayMeta>({ date: '2026-05-25', type: 'holiday', note: 'Pfingsten' })
+    await putDayMeta(proxy)
+
+    const db = await getDb()
+    const stored = await db.get('dayMeta', '2026-05-25')
+    expect(isReactive(stored)).toBe(false)
+    expect(stored).toEqual({ date: '2026-05-25', type: 'holiday', note: 'Pfingsten' })
+  })
+
+  it('replaceAllData stores plain sessions, labels and settings', async () => {
+    const data = reactive({
+      settings: {
+        dailyTargetSeconds: DEFAULT_DAILY_TARGET_SECONDS,
+        balanceStartDate: DEFAULT_BALANCE_START_DATE,
+        schemaVersion: SCHEMA_VERSION,
+        createdAt: 1,
+        onboarded: true,
+      } as Settings,
+      sessions: [mkSession({ id: 'p1' })],
+      dayMeta: [{ date: '2026-05-14', type: 'holiday', note: '' }] as DayMeta[],
+    })
+
+    await replaceAllData(data)
+
+    const db = await getDb()
+    expect(isReactive(await db.get('dayMeta', '2026-05-14'))).toBe(false)
+    expect(isReactive(await db.get('sessions', 'p1'))).toBe(false)
+    expect(isReactive(await db.get('settings', SETTINGS_KEY))).toBe(false)
+    expect(await getAllDayMeta()).toEqual([{ date: '2026-05-14', type: 'holiday', note: '' }])
+  })
+
+  it('mergeImport stores plain labels', async () => {
+    const dayMeta = reactive([{ date: '2026-07-17', type: 'vacation', note: '' }]) as DayMeta[]
+    await mergeImport({ sessions: [], dayMeta })
+
+    const db = await getDb()
+    expect(isReactive(await db.get('dayMeta', '2026-07-17'))).toBe(false)
+  })
+
+  it('putSettings stores a plain object', async () => {
+    const proxy = reactive<Settings>({
+      dailyTargetSeconds: 1,
+      balanceStartDate: '2026-01-01',
+      schemaVersion: SCHEMA_VERSION,
+      createdAt: 2,
+      onboarded: true,
+    })
+    await putSettings(proxy)
+
+    const db = await getDb()
+    expect(isReactive(await db.get('settings', SETTINGS_KEY))).toBe(false)
   })
 })

@@ -1,12 +1,13 @@
 // Async CRUD repository over IndexedDB (HANDOFF.md §5; CLAUDE.md db/repo.ts contract).
 // Thin persistence layer only — no domain logic here.
 
-import { getDb, SETTINGS_KEY, toStoredSession } from './db'
+import { getDb, SETTINGS_KEY, toStoredSession, toStoredDayMeta, toStoredSettings } from './db'
 import type { StoredSession } from './db'
 import type { Session, DayMeta, Settings } from '@/domain/types'
 import {
   DEFAULT_DAILY_TARGET_SECONDS,
   DEFAULT_BALANCE_START_DATE,
+  DEFAULT_URLAUBSANSPRUCH,
   SCHEMA_VERSION,
 } from '@/domain/constants'
 
@@ -47,7 +48,7 @@ export async function getAllDayMeta(): Promise<DayMeta[]> {
 
 export async function putDayMeta(meta: DayMeta): Promise<void> {
   const db = await getDb()
-  await db.put('dayMeta', meta)
+  await db.put('dayMeta', toStoredDayMeta(meta))
 }
 
 export async function deleteDayMeta(date: string): Promise<void> {
@@ -73,6 +74,8 @@ export async function getSettings(): Promise<Settings> {
     schemaVersion: SCHEMA_VERSION,
     createdAt: Date.now(),
     onboarded: false,
+    urlaubsanspruchStandard: DEFAULT_URLAUBSANSPRUCH,
+    urlaubsanspruchByYear: {},
   }
   await db.put('settings', defaults, SETTINGS_KEY)
   return defaults
@@ -80,7 +83,7 @@ export async function getSettings(): Promise<Settings> {
 
 export async function putSettings(settings: Settings): Promise<void> {
   const db = await getDb()
-  await db.put('settings', settings, SETTINGS_KEY)
+  await db.put('settings', toStoredSettings(settings), SETTINGS_KEY)
 }
 
 /** Clears all three stores (used by import-replace). */
@@ -132,8 +135,8 @@ export async function replaceAllData(data: {
   dayMetaStore.clear()
   settingsStore.clear()
   for (const s of data.sessions) sessionStore.put(toStoredSession(s))
-  for (const m of data.dayMeta) dayMetaStore.put(m)
-  settingsStore.put(data.settings, SETTINGS_KEY)
+  for (const m of data.dayMeta) dayMetaStore.put(toStoredDayMeta(m))
+  settingsStore.put(toStoredSettings(data.settings), SETTINGS_KEY)
   await tx.done
 }
 
@@ -151,6 +154,6 @@ export async function mergeImport(data: {
   const sessionStore = tx.objectStore('sessions')
   const dayMetaStore = tx.objectStore('dayMeta')
   for (const s of data.sessions) sessionStore.put(toStoredSession(s))
-  for (const m of data.dayMeta) dayMetaStore.put(m)
+  for (const m of data.dayMeta) dayMetaStore.put(toStoredDayMeta(m))
   await tx.done
 }
