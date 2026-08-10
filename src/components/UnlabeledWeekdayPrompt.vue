@@ -41,12 +41,16 @@ function label(type: DayType): void {
     </p>
     <p v-if="remaining > 0" class="faint">und {{ remaining }} weitere Tag(e)</p>
     <div class="actions">
-      <button class="btn" @click="label('work')">Arbeitstag (leer)</button>
       <button class="btn" @click="label('vacation')">Urlaub</button>
       <button class="btn" @click="label('sick')">Krank</button>
       <button class="btn" @click="label('holiday')">Feiertag</button>
-      <!-- Spans the row: this is the answer for "I took the day off on purpose",
-           which is the only thing separating it from an untracked day. -->
+      <!-- Spans the row, and is the ONLY way out of this prompt that still
+           costs a full day's target. There used to be an "Arbeitstag (leer)"
+           button beside it writing `type: 'work'`, but `gleitzeittag` is
+           excluded from `isLabeledType` (ADR 0001) and so derives identically
+           — same target, same delta, same everything. Two buttons, one
+           outcome. This one survives because it also says WHY the day is
+           empty; a bare 'work' label said nothing. -->
       <button class="btn wide" @click="label('gleitzeittag')">Gleitzeittag (von der Gleitzeit)</button>
     </div>
   </div>
@@ -58,9 +62,11 @@ function label(type: DayType): void {
   flex-direction: column;
   gap: 10px;
 }
+/* Three credited labels across the top, Gleitzeittag spanning beneath them —
+   with the fourth button gone, a 2-column grid left a hole in the second row. */
 .actions {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   gap: 8px;
 }
 .wide {
