@@ -15,5 +15,8 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.vue"]
+  "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.vue"],
+  // src/tools holds throwaway node-side analysis harnesses (fs/path/process),
+  // not app code. They are covered by tsconfig.node.json's environment instead.
+  "exclude": ["src/tools/**"]
 }
