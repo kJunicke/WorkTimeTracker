@@ -233,6 +233,16 @@ export function formatMonthHeading(monthKeyStr: string): string {
   return new Date(y, m - 1, 1).toLocaleDateString('de-DE', { month: 'long', year: 'numeric' })
 }
 
+/**
+ * "12 Tage" / "1 Tag" / "−2 Tage" — a whole-day count with its German noun.
+ * The Urlaubskonto and the span confirmation both count whole days and never
+ * hours, so the singular/plural rule is stated here once rather than in each
+ * screen that shows a figure.
+ */
+export function formatTage(tage: number): string {
+  return `${tage} ${Math.abs(tage) === 1 ? 'Tag' : 'Tage'}`
+}
+
 /** Local "YYYY-MM-DD" for the 1st of a "YYYY-MM" month key. */
 export function startOfMonth(monthKeyStr: string): string {
   return `${monthKeyStr}-01`

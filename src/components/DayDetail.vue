@@ -11,11 +11,13 @@ import { computed, ref } from 'vue'
 import { useStore } from '@/store/useStore'
 import { useClock } from '@/store/useClock'
 import { deriveDay, isLabeledType } from '@/domain/calc'
-import { formatDayHeading, formatDuration, formatSignedDuration, isWeekend } from '@/domain/time'
+import { formatDayHeading, formatDuration, formatSignedDuration, isWeekend, yearKey } from '@/domain/time'
+import { planTageskennzeichnung } from '@/domain/vacation'
 import type { DayDerivation, DayType, Session, SessionKind } from '@/domain/types'
 import SessionRow from '@/components/SessionRow.vue'
 import SessionEditor from '@/components/SessionEditor.vue'
 import StatTile from '@/components/StatTile.vue'
+import GleitzeittagAngebot from '@/components/GleitzeittagAngebot.vue'
 
 const props = defineProps<{
   /** Local "YYYY-MM-DD" calendar day to render. */
@@ -68,9 +70,38 @@ const labelIgnoresWork = computed<boolean>(
 /** A Gleitzeittag looks like an untracked day in the numbers, so say why it costs a full target (ADR 0001). */
 const isGleitzeittag = computed<boolean>(() => derivation.value.type === 'gleitzeittag')
 
+/** Non-null while the "kein Urlaub mehr übrig" offer is on screen. */
+const gleitzeittagAngebotOffen = ref(false)
+
+/**
+ * The Urlaubsanspruch is a hard cap enforced at the point of labeling (ADR
+ * 0001), so a single tap answers to the same rule a span does — otherwise
+ * übrig could be driven negative one day at a time. The rule itself lives in
+ * `@/domain/vacation`; all this does is act on its answer.
+ */
 function onTypeChange(event: Event): void {
-  const value = (event.target as HTMLSelectElement).value as DayType
+  const select = event.target as HTMLSelectElement
+  const value = select.value as DayType
+  const plan = planTageskennzeichnung({
+    date: props.date,
+    type: value,
+    existing: store.dayMetaByDay.value.get(props.date)?.type,
+    uebrig: store.urlaubskontoFor.value(yearKey(props.date)).uebrig,
+  })
+  if (plan === 'gleitzeittagAnbieten') {
+    // Nothing was written, so put the select back to the label the day still
+    // carries rather than leaving it showing a choice that never happened.
+    select.value = derivation.value.type
+    gleitzeittagAngebotOffen.value = true
+    return
+  }
   void store.setDayType(props.date, value)
+}
+
+/** The offer accepted: the day the Urlaubskonto could not pay for becomes a Gleitzeittag. */
+function onAcceptGleitzeittag(): void {
+  gleitzeittagAngebotOffen.value = false
+  void store.setDayType(props.date, 'gleitzeittag')
 }
 
 function onClearType(): void {
@@ -145,7 +176,7 @@ function onEditDelete(): void {
       Kennzeichnung zählt – erfasste Arbeitszeit wird nicht angerechnet.
     </p>
     <p v-if="isGleitzeittag && !derivation.isWeekend" class="faint hint-note">
-      Gleitzeittag – volles Soll, geht vom Saldo ab. Erfasste Arbeitszeit zählt normal.
+      Gleitzeittag – volles Soll, geht von der Gleitzeit ab. Erfasste Arbeitszeit zählt normal.
     </p>
 
     <div class="day-stats">
@@ -170,6 +201,13 @@ function onEditDelete(): void {
       + Sitzung hinzufügen
     </button>
   </section>
+
+  <GleitzeittagAngebot
+    v-if="gleitzeittagAngebotOffen"
+    :date="date"
+    @confirm="onAcceptGleitzeittag"
+    @cancel="gleitzeittagAngebotOffen = false"
+  />
 
   <SessionEditor
     v-if="addingOpen"

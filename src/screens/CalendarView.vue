@@ -13,6 +13,7 @@ import {
   formatDayHeading,
   formatDuration,
   formatMonthHeading,
+  formatTage,
   isWeekend,
   monthGridDays,
   monthKey,
@@ -26,21 +27,10 @@ import { ohneGleitzeittage, planUrlaubSpan } from '@/domain/vacation'
 import type { UrlaubSpanPlan } from '@/domain/vacation'
 import DayDetail from '@/components/DayDetail.vue'
 import HeatCell from '@/components/HeatCell.vue'
+import type { DayTone } from '@/components/HeatCell.vue'
 import CalendarLegend from '@/components/CalendarLegend.vue'
 import StatTile from '@/components/StatTile.vue'
 import UrlaubSpanConfirm from '@/components/UrlaubSpanConfirm.vue'
-
-type DayTone =
-  | 'empty'
-  | 'under'
-  | 'on'
-  | 'over'
-  | 'weekend'
-  | 'vacation'
-  | 'sick'
-  | 'holiday'
-  | 'gleitzeittag'
-  | 'muted'
 
 const DAY_TYPE_LABEL_DE: Record<Exclude<DayType, 'work'>, string> = {
   vacation: 'Urlaub',
@@ -145,11 +135,6 @@ const gridCells = computed<CellData[]>(() =>
 const urlaubsjahr = computed<string>(() => yearKey(viewMonth.value))
 const urlaubskonto = computed(() => store.urlaubskontoFor.value(urlaubsjahr.value))
 
-/** "12 Tage" / "1 Tag" — the Urlaubskonto counts whole days, never hours. */
-function formatTage(tage: number): string {
-  return `${tage} ${Math.abs(tage) === 1 ? 'Tag' : 'Tage'}`
-}
-
 // ---------------------------------------------------------------------
 // Tap-to-open day detail (reuses DayDetail — full session/label editing)
 // ---------------------------------------------------------------------
@@ -197,7 +182,7 @@ function onSelectDay(date: string): void {
     spanAnchor.value = date
     return
   }
-  // Which Urlaubsjahr's budget a span draws on is the caller's question (the
+  // Which Urlaubsjahr's Urlaubskonto a span draws on is the caller's question (the
   // module takes übrig as a number): use the year the span starts in. A span
   // crossing a year boundary is out of scope.
   const [from, to] =

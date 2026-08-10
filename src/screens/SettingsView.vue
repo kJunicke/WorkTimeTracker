@@ -8,7 +8,11 @@ import { useStore } from '@/store/useStore'
 import { parseBackup } from '@/db/backup'
 import type { BackupData } from '@/db/backup'
 import { formatDuration, todayKey, yearKey } from '@/domain/time'
-import { resolveUrlaubsanspruchSettings, setUrlaubsanspruchOverride } from '@/domain/vacation'
+import {
+  normalizeUrlaubsanspruch,
+  resolveUrlaubsanspruchSettings,
+  setUrlaubsanspruchOverride,
+} from '@/domain/vacation'
 
 const {
   settings,
@@ -64,9 +68,10 @@ function onStartDateChange(): void {
 // ---------------------------------------------------------------------------
 // Urlaubsanspruch (Standard + abweichende Urlaubsjahre)
 //
-// Purely an editor: every rule — the on-read defaults, "an absent year
-// inherits the standard", and "removing an override returns the year to the
-// standard rather than to zero" — lives in `@/domain/vacation`.
+// Purely an editor: every rule — the on-read defaults, what counts as a valid
+// figure, "an absent year inherits the standard", and "removing an override
+// returns the year to the standard rather than to zero" — lives in
+// `@/domain/vacation`.
 // ---------------------------------------------------------------------------
 
 const urlaubsanspruch = computed(() => resolveUrlaubsanspruchSettings(settings.value))
@@ -81,7 +86,7 @@ watch(
 )
 
 function onStandardChange(): void {
-  const tage = Math.max(0, Math.min(366, Math.floor(standardTage.value) || 0))
+  const tage = normalizeUrlaubsanspruch(standardTage.value)
   standardTage.value = tage
   void updateSettings({ urlaubsanspruchStandard: tage })
 }
@@ -105,7 +110,7 @@ function writeOverride(urlaubsjahr: string, tage: number | null): void {
 
 function onOverrideChange(urlaubsjahr: string, event: Event): void {
   const raw = Number((event.target as HTMLInputElement).value)
-  writeOverride(urlaubsjahr, Math.max(0, Math.min(366, Math.floor(raw) || 0)))
+  writeOverride(urlaubsjahr, normalizeUrlaubsanspruch(raw))
 }
 
 function onRemoveOverride(urlaubsjahr: string): void {
@@ -124,7 +129,7 @@ const canAddOverride = computed<boolean>(
 
 function onAddOverride(): void {
   if (!canAddOverride.value) return
-  writeOverride(newOverrideYear.value, Math.max(0, Math.min(366, Math.floor(newOverrideTage.value) || 0)))
+  writeOverride(newOverrideYear.value, normalizeUrlaubsanspruch(newOverrideTage.value))
   newOverrideTage.value = 0
 }
 

@@ -1,6 +1,8 @@
 import {
   deriveUrlaubskonto,
+  normalizeUrlaubsanspruch,
   ohneGleitzeittage,
+  planTageskennzeichnung,
   planUrlaubSpan,
   resolveUrlaubsanspruchSettings,
   setUrlaubsanspruchOverride,
@@ -101,6 +103,24 @@ describe('setUrlaubsanspruchOverride — add, edit, remove', () => {
     setUrlaubsanspruchOverride(original, '2026', null)
     expect(original).toEqual({ '2026': 18 })
   })
+})
+
+describe('normalizeUrlaubsanspruch — what counts as a valid figure', () => {
+  const cases: [label: string, input: number, expected: number][] = [
+    ['keeps an ordinary figure', 30, 30],
+    ['keeps zero — a year with no Urlaubsanspruch at all is a real answer', 0, 0],
+    ['keeps the widest a year can be', 366, 366],
+    ['clamps a negative figure to zero', -5, 0],
+    ['clamps beyond a whole year to 366', 400, 366],
+    ['drops the fraction of a typed part-day', 12.7, 12],
+    ['floors towards zero before clamping', -0.5, 0],
+    ['reads an empty/unparseable input as zero', Number.NaN, 0],
+  ]
+  for (const [label, input, expected] of cases) {
+    it(`${label} (${input} → ${expected})`, () => {
+      expect(normalizeUrlaubsanspruch(input)).toBe(expected)
+    })
+  }
 })
 
 describe('deriveUrlaubskonto — genommen/verplant split at today', () => {
@@ -261,7 +281,7 @@ describe('deriveUrlaubskonto — übrig against the Urlaubsanspruch', () => {
 
 const TWO_WEEK_BLOCK = { start: '2026-08-10', end: '2026-08-23' } // Mo through the second So
 
-describe('planUrlaubSpan — a span that fits within the remaining budget', () => {
+describe('planUrlaubSpan — a span that fits within the übrig it was given', () => {
   it('marks every day of a two-week block, but only the ten weekdays cost a day', () => {
     const plan = planUrlaubSpan({ ...TWO_WEEK_BLOCK, dayMetaByDay: new Map(), uebrig: 30 })
 
@@ -334,7 +354,7 @@ describe('planUrlaubSpan — a single-day span', () => {
       uebrig: 30,
     })
     expect(plan.vacation).toEqual([])
-    expect(plan.skipped).toEqual([{ date: '2026-08-11', type: 'sick', reason: 'labeled' }])
+    expect(plan.skipped).toEqual([{ date: '2026-08-11', type: 'sick' }])
     expect(plan.kosten).toBe(0)
   })
 })
@@ -372,7 +392,7 @@ describe('planUrlaubSpan — a day inside the span that already carries a label'
       uebrig: 30,
     })
     expect(plan.vacation).toEqual(['2026-08-10', '2026-08-11', '2026-08-12', '2026-08-14'])
-    expect(plan.skipped).toEqual([{ date: '2026-08-13', type: 'holiday', reason: 'labeled' }])
+    expect(plan.skipped).toEqual([{ date: '2026-08-13', type: 'holiday' }])
     expect(plan.kosten).toBe(4)
     expect(plan.uebrigDanach).toBe(26)
   })
@@ -388,7 +408,7 @@ describe('planUrlaubSpan — a day inside the span that already carries a label'
           uebrig: 30,
         })
         expect(plan.vacation).toEqual(['2026-08-10', '2026-08-12'])
-        expect(plan.skipped).toEqual([{ date: '2026-08-11', type, reason: 'labeled' }])
+        expect(plan.skipped).toEqual([{ date: '2026-08-11', type }])
         expect(plan.kosten).toBe(2)
       })
     }
@@ -402,7 +422,7 @@ describe('planUrlaubSpan — a day inside the span that already carries a label'
       uebrig: 30,
     })
     // Those two days are already drawn from the Urlaubskonto, so re-marking
-    // them would double-charge a budget they have already been paid out of.
+    // them would double-charge an Urlaubskonto they have already been paid out of.
     expect(plan.kosten).toBe(3)
     expect(plan.uebrigDanach).toBe(27)
   })
@@ -429,7 +449,7 @@ describe('planUrlaubSpan — weekends inside the span', () => {
     expect(plan.vacation).toEqual(['2026-08-14', '2026-08-15', '2026-08-16', '2026-08-17'])
   })
 
-  it('never reduce übrig — a weekend-only span costs nothing even at zero budget', () => {
+  it('never reduce übrig — a weekend-only span costs nothing even with nothing übrig', () => {
     const plan = planUrlaubSpan({
       start: '2026-08-15', // Sa
       end: '2026-08-16', // So
@@ -449,13 +469,13 @@ describe('planUrlaubSpan — weekends inside the span', () => {
       uebrig: 30,
     })
     expect(plan.vacation).toEqual(['2026-08-14', '2026-08-16', '2026-08-17'])
-    expect(plan.skipped).toEqual([{ date: '2026-08-15', type: 'holiday', reason: 'labeled' }])
+    expect(plan.skipped).toEqual([{ date: '2026-08-15', type: 'holiday' }])
     expect(plan.kosten).toBe(2)
   })
 })
 
-describe('planUrlaubSpan — a span longer than the remaining budget', () => {
-  it('splits at exactly the budget boundary: the last day that fits is Urlaub, the first that does not is a Gleitzeittag candidate', () => {
+describe('planUrlaubSpan — a span longer than the übrig it was given', () => {
+  it('splits at exactly the Urlaubsanspruch boundary: the last day that fits is Urlaub, the first that does not is a Gleitzeittag candidate', () => {
     const plan = planUrlaubSpan({ ...TWO_WEEK_BLOCK, dayMetaByDay: new Map(), uebrig: 3 })
 
     // Mo/Di/Mi fit the three remaining days; Do is the first weekday that does not.
@@ -492,7 +512,7 @@ describe('planUrlaubSpan — a span longer than the remaining budget', () => {
 
   it('a weekend falling past the boundary is still Urlaub and is never offered as a Gleitzeittag', () => {
     const plan = planUrlaubSpan({
-      start: '2026-08-14', // Fr — the one weekday the budget still covers
+      start: '2026-08-14', // Fr — the one weekday the Urlaubskonto still covers
       end: '2026-08-17', // Mo — the first weekday past it
       dayMetaByDay: new Map(),
       uebrig: 1,
@@ -502,7 +522,7 @@ describe('planUrlaubSpan — a span longer than the remaining budget', () => {
     expect(plan.kosten).toBe(1)
   })
 
-  it('with zero budget left, every weekday is a Gleitzeittag candidate and only the weekends are Urlaub', () => {
+  it('with nothing übrig, every weekday is a Gleitzeittag candidate and only the weekends are Urlaub', () => {
     const plan = planUrlaubSpan({
       start: '2026-08-10', // Mo
       end: '2026-08-16', // So
@@ -522,8 +542,8 @@ describe('planUrlaubSpan — a span longer than the remaining budget', () => {
   })
 
   it('an already over-drawn Urlaubsjahr buys nothing back — every weekday is a candidate', () => {
-    // übrig is allowed to be negative (`deriveUrlaubskonto`); a negative budget
-    // is simply no budget, never a debt the span is asked to pay off first.
+    // übrig is allowed to be negative (`deriveUrlaubskonto`); a negative übrig
+    // is simply nothing left, never a debt the span is asked to pay off first.
     const plan = planUrlaubSpan({
       start: '2026-08-10',
       end: '2026-08-12',
@@ -544,7 +564,7 @@ describe('planUrlaubSpan — a span longer than the remaining budget', () => {
     })
     expect(plan.vacation).toEqual(['2026-08-10'])
     expect(plan.gleitzeittag).toEqual(['2026-08-11', '2026-08-12', '2026-08-14'])
-    expect(plan.skipped).toEqual([{ date: '2026-08-13', type: 'holiday', reason: 'labeled' }])
+    expect(plan.skipped).toEqual([{ date: '2026-08-13', type: 'holiday' }])
   })
 
   it('never plans more vacation days than the übrig it was given — the Urlaubsanspruch is a hard cap', () => {
@@ -559,7 +579,7 @@ describe('planUrlaubSpan — a span longer than the remaining budget', () => {
 })
 
 describe('ohneGleitzeittage — declining the offer', () => {
-  it('drops the candidates and still applies every Urlaub day the budget covered', () => {
+  it('drops the candidates and still applies every Urlaub day the Urlaubsanspruch covered', () => {
     const plan = planUrlaubSpan({ ...TWO_WEEK_BLOCK, dayMetaByDay: new Map(), uebrig: 3 })
     const declined = ohneGleitzeittage(plan)
 
@@ -578,5 +598,87 @@ describe('ohneGleitzeittage — declining the offer', () => {
   it('is a no-op for a plan that fits', () => {
     const plan = planUrlaubSpan({ ...TWO_WEEK_BLOCK, dayMetaByDay: new Map(), uebrig: 30 })
     expect(ohneGleitzeittage(plan)).toEqual(plan)
+  })
+})
+
+// ---------------------------------------------------------------------------
+// planTageskennzeichnung
+//
+// The same hard cap as planUrlaubSpan, on the single-day labeling path:
+// 2026-08-11 is a Dienstag, 2026-08-15 a Samstag.
+// ---------------------------------------------------------------------------
+
+const WEEKDAY = '2026-08-11'
+const WEEKEND = '2026-08-15'
+
+describe('planTageskennzeichnung — the Urlaubsanspruch caps single days too', () => {
+  const cases: [
+    label: string,
+    args: Parameters<typeof planTageskennzeichnung>[0],
+    expected: ReturnType<typeof planTageskennzeichnung>,
+  ][] = [
+    [
+      'a weekday with nothing übrig is offered as a Gleitzeittag instead',
+      { date: WEEKDAY, type: 'vacation', existing: undefined, uebrig: 0 },
+      'gleitzeittagAnbieten',
+    ],
+    [
+      'a weekday with one day übrig is labeled',
+      { date: WEEKDAY, type: 'vacation', existing: undefined, uebrig: 1 },
+      'kennzeichnen',
+    ],
+    [
+      'a weekend is labeled however little is übrig — it costs no Urlaubstag',
+      { date: WEEKEND, type: 'vacation', existing: undefined, uebrig: 0 },
+      'kennzeichnen',
+    ],
+    [
+      'a day already labeled Urlaub is re-confirmed, not newly spent',
+      { date: WEEKDAY, type: 'vacation', existing: 'vacation', uebrig: 0 },
+      'kennzeichnen',
+    ],
+    [
+      'an over-drawn Urlaubsjahr is simply nothing übrig, never a debt',
+      { date: WEEKDAY, type: 'vacation', existing: undefined, uebrig: -3 },
+      'gleitzeittagAnbieten',
+    ],
+    [
+      'a day carrying some other label still needs an Urlaubstag to become Urlaub',
+      { date: WEEKDAY, type: 'vacation', existing: 'holiday', uebrig: 0 },
+      'gleitzeittagAnbieten',
+    ],
+    [
+      'an explicit work row is not a label and still needs an Urlaubstag',
+      { date: WEEKDAY, type: 'vacation', existing: 'work', uebrig: 0 },
+      'gleitzeittagAnbieten',
+    ],
+  ]
+  for (const [label, args, expected] of cases) {
+    it(label, () => {
+      expect(planTageskennzeichnung(args)).toBe(expected)
+    })
+  }
+
+  describe('every label other than Urlaub is unaffected by the Urlaubskonto', () => {
+    const others: DayType[] = ['work', 'sick', 'holiday', 'gleitzeittag']
+    for (const type of others) {
+      it(`${type} is labeled even with nothing übrig`, () => {
+        for (const date of [WEEKDAY, WEEKEND]) {
+          expect(
+            planTageskennzeichnung({ date, type, existing: undefined, uebrig: -3 }),
+          ).toBe('kennzeichnen')
+        }
+      })
+    }
+  })
+
+  it('agrees with planUrlaubSpan on a single-day span — one rule, two entry points', () => {
+    for (const uebrig of [-2, 0, 1, 30]) {
+      for (const date of [WEEKDAY, WEEKEND]) {
+        const span = planUrlaubSpan({ start: date, end: date, dayMetaByDay: new Map(), uebrig })
+        const single = planTageskennzeichnung({ date, type: 'vacation', existing: undefined, uebrig })
+        expect(single === 'kennzeichnen').toBe(span.vacation.length === 1)
+      }
+    }
   })
 })

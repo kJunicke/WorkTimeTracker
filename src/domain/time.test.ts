@@ -17,6 +17,7 @@ import {
   formatWeekRange,
   formatWeekHeading,
   formatMonthHeading,
+  formatTage,
   startOfMonth,
   endOfMonth,
   addMonths,
@@ -267,6 +268,22 @@ describe('formatMonthHeading', () => {
   it('renders full German month names for January and December', () => {
     expect(formatMonthHeading('2026-01')).toBe('Januar 2026')
     expect(formatMonthHeading('2026-12')).toBe('Dezember 2026')
+  })
+})
+
+describe('formatTage', () => {
+  it('uses the singular for exactly one day', () => {
+    expect(formatTage(1)).toBe('1 Tag')
+  })
+
+  it('uses the plural for zero and for more than one day', () => {
+    expect(formatTage(0)).toBe('0 Tage')
+    expect(formatTage(12)).toBe('12 Tage')
+  })
+
+  it('uses the singular for minus one day — an over-drawn Urlaubsjahr still reads correctly', () => {
+    expect(formatTage(-1)).toBe('-1 Tag')
+    expect(formatTage(-2)).toBe('-2 Tage')
   })
 })
 

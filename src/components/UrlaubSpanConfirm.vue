@@ -9,7 +9,7 @@
 import { computed } from 'vue'
 import type { UrlaubSpanPlan } from '@/domain/vacation'
 import type { DayType } from '@/domain/types'
-import { formatDayHeading } from '@/domain/time'
+import { formatDayHeading, formatTage } from '@/domain/time'
 
 const props = defineProps<{
   plan: UrlaubSpanPlan
@@ -33,10 +33,6 @@ const SKIP_LABEL_DE: Record<Exclude<DayType, 'work'>, [string, string]> = {
 }
 /** Fixed order so the wording is stable whatever order the plan skipped them in. */
 const SKIP_ORDER: Exclude<DayType, 'work'>[] = ['holiday', 'sick', 'vacation', 'gleitzeittag']
-
-function formatTage(tage: number): string {
-  return `${tage} ${Math.abs(tage) === 1 ? 'Tag' : 'Tage'}`
-}
 
 const spanHeading = computed<string>(() =>
   props.plan.start === props.plan.end
@@ -64,7 +60,6 @@ const summary = computed<string>(() => {
 
 /** "Do., 13.08.2026 bleibt Feiertag" — one line per day the plan leaves alone. */
 function skipLine(skip: UrlaubSpanPlan['skipped'][number]): string {
-  if (skip.type === 'work') return formatDayHeading(skip.date)
   return `${formatDayHeading(skip.date)} bleibt ${SKIP_LABEL_DE[skip.type][0]}`
 }
 

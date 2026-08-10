@@ -47,7 +47,7 @@ function label(type: DayType): void {
       <button class="btn" @click="label('holiday')">Feiertag</button>
       <!-- Spans the row: this is the answer for "I took the day off on purpose",
            which is the only thing separating it from an untracked day. -->
-      <button class="btn wide" @click="label('gleitzeittag')">Gleitzeittag (vom Saldo)</button>
+      <button class="btn wide" @click="label('gleitzeittag')">Gleitzeittag (von der Gleitzeit)</button>
     </div>
   </div>
 </template>

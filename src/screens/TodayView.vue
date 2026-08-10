@@ -4,11 +4,13 @@
 // the primary state-action button(s), and today's totals.
 import { computed, ref } from 'vue'
 import { useStore } from '@/store/useStore'
-import { formatDuration, formatSignedDuration, formatStopwatch } from '@/domain/time'
+import { formatDuration, formatSignedDuration, formatStopwatch, yearKey } from '@/domain/time'
+import { planTageskennzeichnung } from '@/domain/vacation'
 import type { DayType } from '@/domain/types'
 import StatTile from '@/components/StatTile.vue'
 import ReconcilePrompt from '@/components/ReconcilePrompt.vue'
 import UnlabeledWeekdayPrompt from '@/components/UnlabeledWeekdayPrompt.vue'
+import GleitzeittagAngebot from '@/components/GleitzeittagAngebot.vue'
 import OnboardingPrompt from '@/components/OnboardingPrompt.vue'
 
 const {
@@ -19,6 +21,8 @@ const {
   elapsedSeconds,
   balanceSeconds,
   todayDerivation,
+  dayMetaByDay,
+  urlaubskontoFor,
   startWork,
   startBreak,
   resume,
@@ -68,8 +72,34 @@ function onApplyReconciliation(realEndMs: number): void {
   void applyReconciliation(realEndMs)
 }
 
+/** The day whose Urlaub choice hit the cap, while the offer is on screen. */
+const gleitzeittagAngebotDate = ref<string | null>(null)
+
+/**
+ * The prompt's "Urlaub" button is the same single-day labeling path as
+ * DayDetail's select, so it answers to the same hard cap (ADR 0001). The rule
+ * lives in `@/domain/vacation` — this only acts on its answer, and writes
+ * nothing at all while the offer is unanswered.
+ */
 function onLabelDay(date: string, type: DayType): void {
+  const plan = planTageskennzeichnung({
+    date,
+    type,
+    existing: dayMetaByDay.value.get(date)?.type,
+    uebrig: urlaubskontoFor.value(yearKey(date)).uebrig,
+  })
+  if (plan === 'gleitzeittagAnbieten') {
+    gleitzeittagAngebotDate.value = date
+    return
+  }
   void setDayType(date, type)
+}
+
+/** The offer accepted: the day the Urlaubskonto could not pay for becomes a Gleitzeittag. */
+function onAcceptGleitzeittag(): void {
+  const date = gleitzeittagAngebotDate.value
+  gleitzeittagAngebotDate.value = null
+  if (date) void setDayType(date, 'gleitzeittag')
 }
 </script>
 
@@ -88,6 +118,13 @@ function onLabelDay(date: string, type: DayType): void {
       v-if="unlabeledPastWeekdays.length"
       :dates="unlabeledPastWeekdays"
       @label="onLabelDay"
+    />
+
+    <GleitzeittagAngebot
+      v-if="gleitzeittagAngebotDate"
+      :date="gleitzeittagAngebotDate"
+      @confirm="onAcceptGleitzeittag"
+      @cancel="gleitzeittagAngebotDate = null"
     />
 
     <section class="card hero">

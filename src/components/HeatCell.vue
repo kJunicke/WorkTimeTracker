@@ -1,11 +1,12 @@
-<script setup lang="ts">
-// Presentational calendar day cell (HANDOFF §4.4). CalendarView computes
-// which "tone" applies to a date (weekend/label precedence, heat-ramp
-// thresholds, window/future muting) — this component only renders a given
-// tone; it never touches the store or re-derives anything.
-import { computed } from 'vue'
-
-type DayTone =
+<script lang="ts">
+/**
+ * The set of cell appearances the Kalender grid can show. Declared once, here
+ * with the component that actually paints them (every tone has a matching
+ * `.tone-*` rule below), and imported by CalendarView, which decides which
+ * tone a date gets. Two copies of the list could drift apart silently — a new
+ * label would then be paintable in one file and unnameable in the other.
+ */
+export type DayTone =
   | 'empty'
   | 'under'
   | 'on'
@@ -16,6 +17,14 @@ type DayTone =
   | 'holiday'
   | 'gleitzeittag'
   | 'muted'
+</script>
+
+<script setup lang="ts">
+// Presentational calendar day cell (HANDOFF §4.4). CalendarView computes
+// which "tone" applies to a date (weekend/label precedence, heat-ramp
+// thresholds, window/future muting) — this component only renders a given
+// tone; it never touches the store or re-derives anything.
+import { computed } from 'vue'
 
 const props = withDefaults(
   defineProps<{
