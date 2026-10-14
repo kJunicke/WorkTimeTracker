@@ -48,6 +48,7 @@ describe('buildBackup', () => {
       balanceStartDate: '2026-05-06',
       urlaubsanspruchStandard: 30,
       urlaubsanspruchByYear: {},
+      tagessollAb: {},
     })
     expect(backup.sessions).toEqual(sessions)
     expect(backup.dayMeta).toEqual(dayMeta)
@@ -65,6 +66,7 @@ describe('buildBackup', () => {
     expect(Object.keys(backup.settings).sort()).toEqual([
       'balanceStartDate',
       'dailyTargetSeconds',
+      'tagessollAb',
       'urlaubsanspruchByYear',
       'urlaubsanspruchStandard',
     ])
@@ -96,6 +98,7 @@ describe('parseBackup', () => {
       balanceStartDate: '2026-06-01',
       urlaubsanspruchStandard: 30,
       urlaubsanspruchByYear: {},
+      tagessollAb: {},
     })
     expect(result.data.sessions).toEqual(sessions)
     expect(result.data.dayMeta).toEqual(dayMeta)
@@ -140,6 +143,39 @@ describe('parseBackup', () => {
 
     const badMap = { ...backup, settings: { ...backup.settings, urlaubsanspruchByYear: { '2026': 'viele' } } }
     expect(parseBackup(JSON.stringify(badMap)).ok).toBe(false)
+  })
+
+  it('round-trips the Tagessoll-Zeitleiste, still at schemaVersion 1', () => {
+    const settings = mkSettings({ tagessollAb: { '2026-10-01': 28800, '2027-01-01': 21300 } })
+
+    const backup = buildBackup({ settings, sessions: [], dayMeta: [] })
+    expect(backup.schemaVersion).toBe(1)
+
+    const result = parseBackup(JSON.stringify(backup))
+    expect(result.ok).toBe(true)
+    if (!result.ok) throw new Error('expected ok:true')
+    expect(result.data.settings.tagessollAb).toEqual({ '2026-10-01': 28800, '2027-01-01': 21300 })
+  })
+
+  it('imports a backup written before the Tagessoll-Zeitleiste as only the "seit Beginn" value', () => {
+    const backup = buildBackup({ settings: mkSettings({ dailyTargetSeconds: 18000 }), sessions: [], dayMeta: [] })
+    const { tagessollAb: _tagessollAb, ...oldSettings } = backup.settings
+    const older = { ...backup, settings: oldSettings }
+
+    const result = parseBackup(JSON.stringify(older))
+    expect(result.ok).toBe(true)
+    if (!result.ok) throw new Error('expected ok:true')
+    expect(result.data.settings.dailyTargetSeconds).toBe(18000)
+    expect(result.data.settings.tagessollAb).toEqual({})
+  })
+
+  it('rejects a present-but-malformed Tagessoll-Zeitleiste', () => {
+    const backup = buildBackup({ settings: mkSettings(), sessions: [], dayMeta: [] })
+    const badValue = { ...backup, settings: { ...backup.settings, tagessollAb: { '2026-10-01': '8h' } } }
+    expect(parseBackup(JSON.stringify(badValue)).ok).toBe(false)
+
+    const badDate = { ...backup, settings: { ...backup.settings, tagessollAb: { Oktober: 28800 } } }
+    expect(parseBackup(JSON.stringify(badDate)).ok).toBe(false)
   })
 
   it('round-trips a gleitzeittag label (additive day type, still schemaVersion 1)', () => {

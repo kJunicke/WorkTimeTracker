@@ -62,6 +62,13 @@ export interface Settings {
    * like `urlaubsanspruchStandard`.
    */
   urlaubsanspruchByYear?: Record<string, number>
+  /**
+   * The dated entries of the Tagessoll-Zeitleiste (ADR 0004), keyed by local
+   * "YYYY-MM-DD" start date; `dailyTargetSeconds` above is the undated "seit
+   * Beginn" entry. Optional-with-default on read like the Urlaubsanspruch
+   * fields: callers MUST read the Tagessoll through `domain/tagessoll`.
+   */
+  tagessollAb?: Record<string, number>
 }
 
 /** Timer machine state, derived from the open session (HANDOFF §3.2). */
@@ -99,6 +106,8 @@ export interface BackupFile {
     urlaubsanspruchStandard?: number
     /** Additive since the Urlaubskonto feature; absent in older files (§6 stays at version 1). */
     urlaubsanspruchByYear?: Record<string, number>
+    /** Additive since the Tagessoll-Zeitleiste; absent in older files (§6 stays at version 1). */
+    tagessollAb?: Record<string, number>
   }
   sessions: Session[]
   dayMeta: DayMeta[]

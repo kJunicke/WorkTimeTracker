@@ -14,6 +14,7 @@ import { deriveDay, isLabeledType } from '@/domain/calc'
 import { formatDayHeading, formatDuration, formatSignedDuration, isWeekend, yearKey } from '@/domain/time'
 import { planTageskennzeichnung } from '@/domain/vacation'
 import { FEIERTAGE_LAND, feiertagAm } from '@/domain/holidays'
+import { tagessollAm } from '@/domain/tagessoll'
 import type { DayDerivation, DayType, Session, SessionKind } from '@/domain/types'
 import SessionRow from '@/components/SessionRow.vue'
 import SessionEditor from '@/components/SessionEditor.vue'
@@ -50,7 +51,7 @@ const derivation = computed<DayDerivation>(() => {
     type: store.dayMetaByDay.value.get(props.date)?.type ?? 'work',
     isWeekend: isWeekend(props.date),
     sessions: store.sessionsByDay.value.get(props.date) ?? [],
-    dailyTargetSeconds: store.settings.value.dailyTargetSeconds,
+    dailyTargetSeconds: tagessollAm(props.date, store.settings.value),
   })
 })
 

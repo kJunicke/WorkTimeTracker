@@ -22,6 +22,8 @@ import { dayKeyFromMs, enumerateDays, isWeekend, todayKey } from '@/domain/time'
 import { deriveDay, deriveRange } from '@/domain/calc'
 import { deriveUrlaubskonto, urlaubsanspruchFor } from '@/domain/vacation'
 import { feiertageImFenster } from '@/domain/holidays'
+import { tagessollAm } from '@/domain/tagessoll'
+import type { TagessollSettings } from '@/domain/tagessoll'
 import type { UrlaubSpanPlan, Urlaubskonto } from '@/domain/vacation'
 import {
   DEFAULT_BALANCE_START_DATE,
@@ -163,10 +165,26 @@ const range = computed(() =>
     sessionsByDay: virtualizedSessionsByDay.value,
     dayMetaByDay: dayMetaByDay.value,
     dailyTargetSeconds: settings.value.dailyTargetSeconds,
+    tagessollAb: settings.value.tagessollAb,
   }),
 )
 
 const balanceSeconds = computed<number>(() => range.value.balanceSeconds)
+
+/**
+ * How far the Gesamtsaldo would move if the Tagessoll-Zeitleiste became
+ * `neu` — what the settings show before saving a change to the past.
+ */
+function saldoAenderung(neu: TagessollSettings): number {
+  const { balanceSeconds: neuerSaldo } = deriveRange({
+    startDate: settings.value.balanceStartDate,
+    endDate: todayKey(now.value),
+    sessionsByDay: virtualizedSessionsByDay.value,
+    dayMetaByDay: dayMetaByDay.value,
+    ...neu,
+  })
+  return neuerSaldo - balanceSeconds.value
+}
 
 /**
  * `range.days` only covers [balanceStartDate .. today]. History/Calendar also
@@ -193,7 +211,7 @@ const derivedDays = computed<Map<string, DayDerivation>>(() => {
         type: dayMetaByDay.value.get(date)?.type ?? 'work',
         isWeekend: isWeekend(date),
         sessions: bucket.get(date) ?? [],
-        dailyTargetSeconds: settings.value.dailyTargetSeconds,
+        dailyTargetSeconds: tagessollAm(date, settings.value),
       }),
     )
   }
@@ -212,7 +230,7 @@ const todayDerivation = computed<DayDerivation>(() => {
     type: dayMetaByDay.value.get(today)?.type ?? 'work',
     isWeekend: isWeekend(today),
     sessions: virtualizedSessionsByDay.value.get(today) ?? [],
-    dailyTargetSeconds: settings.value.dailyTargetSeconds,
+    dailyTargetSeconds: tagessollAm(today, settings.value),
   })
 })
 
@@ -469,7 +487,11 @@ async function updateSettings(
   patch: Partial<
     Pick<
       Settings,
-      'dailyTargetSeconds' | 'balanceStartDate' | 'urlaubsanspruchStandard' | 'urlaubsanspruchByYear'
+      | 'dailyTargetSeconds'
+      | 'balanceStartDate'
+      | 'urlaubsanspruchStandard'
+      | 'urlaubsanspruchByYear'
+      | 'tagessollAb'
     >
   >,
 ): Promise<void> {
@@ -526,6 +548,7 @@ async function importBackup(data: BackupData, mode: 'replace' | 'merge'): Promis
       // `parseBackup` has already defaulted them for a file predating the fields.
       urlaubsanspruchStandard: data.settings.urlaubsanspruchStandard,
       urlaubsanspruchByYear: data.settings.urlaubsanspruchByYear,
+      tagessollAb: data.settings.tagessollAb,
     }
     // One atomic transaction (see repo.replaceAllData): the in-memory refs are
     // updated ONLY after it resolves, so a failed/aborted write throws to the
@@ -583,6 +606,7 @@ const store = {
   unlabeledPastWeekdays,
   needsOnboarding,
   urlaubskontoFor,
+  saldoAenderung,
   // actions
   init,
   startWork,

@@ -1,13 +1,16 @@
 <script setup lang="ts">
-// Settings screen (HANDOFF §4.5): daily target, balance start date, and JSON
+// Settings screen (HANDOFF §4.5): Tagessoll-Zeitleiste, balance start date, and JSON
 // backup export/import. No native alert/confirm/dialog — destructive actions
 // use an inline two-step confirm (same convention as SessionEditor.vue's
 // delete flow).
 import { computed, ref, watch } from 'vue'
 import { useStore } from '@/store/useStore'
+import { useClock } from '@/store/useClock'
 import { parseBackup } from '@/db/backup'
 import type { BackupData } from '@/db/backup'
-import { formatDuration, todayKey, yearKey } from '@/domain/time'
+import { formatDuration, formatSignedDuration, todayKey, yearKey } from '@/domain/time'
+import { betrifftVergangenheit, setTagessollEintrag } from '@/domain/tagessoll'
+import type { TagessollSettings } from '@/domain/tagessoll'
 import {
   normalizeUrlaubsanspruch,
   resolveUrlaubsanspruchSettings,
@@ -16,35 +19,119 @@ import {
 
 const {
   settings,
+  saldoAenderung,
   updateSettings,
   exportBackup,
   importBackup,
 } = useStore()
 
 // ---------------------------------------------------------------------------
-// Tagesziel (Mo–Fr)
+// Tagessoll (Mo–Fr) — the Tagessoll-Zeitleiste (ADR 0004)
+//
+// Every edit goes through `proposeTagessoll`: a change that reaches a day up
+// to today is held back and shown with its Saldo change first; a change that
+// only touches the future saves straight away.
 // ---------------------------------------------------------------------------
+
+/** Clamps free-typed hours/minutes to a whole-minute duration in seconds. */
+function toSeconds(hours: number, minutes: number): number {
+  const h = Math.max(0, Math.min(23, Math.floor(hours) || 0))
+  const m = Math.max(0, Math.min(59, Math.floor(minutes) || 0))
+  return h * 3600 + m * 60
+}
+
+const tagessoll = computed<Required<TagessollSettings>>(() => ({
+  dailyTargetSeconds: settings.value.dailyTargetSeconds,
+  tagessollAb: settings.value.tagessollAb ?? {},
+}))
 
 const targetHours = ref(0)
 const targetMinutes = ref(0)
 
+/** Re-seeds the "seit Beginn" inputs from the store, also after a cancelled change. */
+function resetTargetInputs(): void {
+  const sec = settings.value.dailyTargetSeconds
+  targetHours.value = Math.floor(sec / 3600)
+  targetMinutes.value = Math.floor((sec % 3600) / 60)
+}
+
 // Kept in sync with the store (not just seeded once): a backup "Ersetzen" or
 // the legacy importer can change `settings` out from under this screen.
-watch(
-  () => settings.value.dailyTargetSeconds,
-  (sec) => {
-    targetHours.value = Math.floor(sec / 3600)
-    targetMinutes.value = Math.floor((sec % 3600) / 60)
-  },
-  { immediate: true },
+watch(() => settings.value.dailyTargetSeconds, resetTargetInputs, { immediate: true })
+
+/** The dated entries in start order, so the rows read as a timeline. */
+const tagessollRows = computed(() =>
+  Object.entries(tagessoll.value.tagessollAb)
+    .map(([ab, seconds]) => ({ ab, seconds }))
+    .sort((a, b) => a.ab.localeCompare(b.ab)),
 )
 
+const { now } = useClock()
+
+/** The start date of the entry in force today; `null` while "seit Beginn" still is. */
+const aktuellerEintrag = computed<string | null>(() => {
+  const today = todayKey(now.value)
+  return tagessollRows.value.filter((row) => row.ab <= today).at(-1)?.ab ?? null
+})
+
+/**
+ * A change held back for confirmation, with how far it moves the Gesamtsaldo.
+ * It is a whole new timeline, so it is only valid against the one it was
+ * computed from: any other change to the timeline (a later edit, a backup
+ * "Ersetzen") drops it rather than letting "Speichern" write a stale copy back.
+ */
+const pendingTagessoll = ref<{ neu: Required<TagessollSettings>; saldoAenderung: number } | null>(null)
+watch(tagessoll, () => {
+  pendingTagessoll.value = null
+  resetTargetInputs()
+})
+
+function proposeTagessoll(neu: Required<TagessollSettings>): void {
+  pendingTagessoll.value = null
+  if (betrifftVergangenheit(tagessoll.value, neu, todayKey())) {
+    pendingTagessoll.value = { neu, saldoAenderung: saldoAenderung(neu) }
+  } else {
+    void updateSettings(neu)
+  }
+}
+
+function onConfirmTagessoll(): void {
+  const pending = pendingTagessoll.value
+  if (!pending) return
+  pendingTagessoll.value = null
+  void updateSettings(pending.neu)
+}
+
+function onCancelTagessoll(): void {
+  pendingTagessoll.value = null
+  resetTargetInputs()
+}
+
 function onTargetChange(): void {
-  const h = Math.max(0, Math.min(23, Math.floor(targetHours.value) || 0))
-  const m = Math.max(0, Math.min(59, Math.floor(targetMinutes.value) || 0))
-  targetHours.value = h
-  targetMinutes.value = m
-  void updateSettings({ dailyTargetSeconds: h * 3600 + m * 60 })
+  proposeTagessoll({ ...tagessoll.value, dailyTargetSeconds: toSeconds(targetHours.value, targetMinutes.value) })
+}
+
+function writeEintrag(ab: string, seconds: number | null): void {
+  proposeTagessoll({
+    ...tagessoll.value,
+    tagessollAb: setTagessollEintrag(tagessoll.value.tagessollAb, ab, seconds),
+  })
+}
+
+function onRemoveEintrag(ab: string): void {
+  writeEintrag(ab, null)
+}
+
+const newEintragAb = ref(todayKey())
+const newEintragHours = ref(8)
+const newEintragMinutes = ref(0)
+
+/** Saving on a date that already has an entry replaces it (start dates are unique). */
+const newEintragErsetzt = computed<boolean>(() => newEintragAb.value in tagessoll.value.tagessollAb)
+
+function onAddEintrag(): void {
+  if (!newEintragAb.value) return
+  writeEintrag(newEintragAb.value, toSeconds(newEintragHours.value, newEintragMinutes.value))
 }
 
 // ---------------------------------------------------------------------------
@@ -236,11 +323,15 @@ async function onMerge(): Promise<void> {
 <template>
   <section class="screen">
     <div class="card">
-      <h2>Tagesziel (Mo–Fr)</h2>
+      <h2>Tagessoll (Mo–Fr)</h2>
       <p class="muted">
-        Aktuell: <strong class="mono">{{ formatDuration(settings.dailyTargetSeconds) }}</strong> pro
-        Arbeitstag. Wochenenden haben kein Soll.
+        Jeder Eintrag gilt ab seinem Datum, bis der nächste beginnt. Wochenenden haben kein Soll.
       </p>
+
+      <h3 class="sub-heading">
+        Seit Beginn
+        <span v-if="aktuellerEintrag === null" class="badge current-badge">aktuell</span>
+      </h3>
       <div class="field-row">
         <div class="field">
           <label for="target-hours">Stunden</label>
@@ -263,6 +354,50 @@ async function onMerge(): Promise<void> {
             max="59"
             @change="onTargetChange"
           />
+        </div>
+      </div>
+
+      <h3 class="sub-heading">Ab Datum</h3>
+      <p v-if="tagessollRows.length === 0" class="muted">
+        Keine weiteren Einträge — jeder Tag nutzt das Soll seit Beginn.
+      </p>
+      <div v-for="row in tagessollRows" :key="row.ab" class="list-row">
+        <span class="list-key mono">ab {{ row.ab }}</span>
+        <strong class="mono">{{ formatDuration(row.seconds) }}</strong>
+        <span v-if="row.ab === aktuellerEintrag" class="badge current-badge">aktuell</span>
+        <button
+          class="btn btn-ghost"
+          type="button"
+          :aria-label="`Tagessoll ab ${row.ab} entfernen`"
+          @click="onRemoveEintrag(row.ab)"
+        >
+          Entfernen
+        </button>
+      </div>
+
+      <div class="list-row">
+        <input v-model="newEintragAb" class="list-key-input" type="date" aria-label="Gilt ab" />
+        <input v-model.number="newEintragHours" type="number" min="0" max="23" aria-label="Stunden" />
+        <input v-model.number="newEintragMinutes" type="number" min="0" max="59" aria-label="Minuten" />
+        <button class="btn" type="button" :disabled="!newEintragAb" @click="onAddEintrag">
+          {{ newEintragErsetzt ? 'Ersetzen' : 'Hinzufügen' }}
+        </button>
+      </div>
+
+      <div v-if="pendingTagessoll" class="inline-confirm">
+        <p class="warning">
+          <template v-if="pendingTagessoll.saldoAenderung === 0">
+            Diese Änderung betrifft vergangene Tage, ändert deinen Saldo aber nicht. Speichern?
+          </template>
+          <template v-else>
+            Diese Änderung betrifft vergangene Tage und ändert deinen Saldo um
+            <strong class="mono">{{ formatSignedDuration(pendingTagessoll.saldoAenderung) }}</strong>.
+            Speichern?
+          </template>
+        </p>
+        <div class="action-row">
+          <button class="btn btn-ghost" type="button" @click="onCancelTagessoll">Abbrechen</button>
+          <button class="btn btn-primary" type="button" @click="onConfirmTagessoll">Speichern</button>
         </div>
       </div>
     </div>
@@ -298,8 +433,8 @@ async function onMerge(): Promise<void> {
       <p v-if="overrideRows.length === 0" class="muted">
         Keine Abweichungen — jedes Jahr nutzt den Standard.
       </p>
-      <div v-for="row in overrideRows" :key="row.urlaubsjahr" class="override-row">
-        <span class="override-year mono">{{ row.urlaubsjahr }}</span>
+      <div v-for="row in overrideRows" :key="row.urlaubsjahr" class="list-row">
+        <span class="list-key mono">{{ row.urlaubsjahr }}</span>
         <input
           :value="row.tage"
           type="number"
@@ -318,10 +453,10 @@ async function onMerge(): Promise<void> {
         </button>
       </div>
 
-      <div class="override-row">
+      <div class="list-row">
         <input
           v-model="newOverrideYear"
-          class="override-year-input"
+          class="list-key-input"
           type="number"
           min="1970"
           max="9999"
@@ -431,24 +566,28 @@ async function onMerge(): Promise<void> {
   color: var(--text-muted);
   margin: 4px 0 0;
 }
-.override-row {
+.list-row {
   display: flex;
   align-items: center;
   gap: 8px;
 }
-.override-row input {
+.list-row input {
   flex: 1;
   min-width: 0;
 }
-.override-row .btn {
+.list-row .btn {
   flex: none;
 }
-.override-year {
+.list-key {
   flex: 1;
   font-weight: 700;
 }
-.override-year-input {
+.list-key-input {
   flex: 1;
+}
+.current-badge {
+  background: var(--over-weak);
+  color: var(--over);
 }
 
 .backup-card .btn + .btn {

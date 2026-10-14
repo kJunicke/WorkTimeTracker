@@ -283,3 +283,25 @@ describe('deriveRange — enumerates every day, sums the balance', () => {
     expect(balanceSeconds).toBe(-34200)
   })
 })
+
+describe('deriveRange — each day against the Tagessoll in force on it (ADR 0004)', () => {
+  it('measures the days before an Aufstockung at the old Tagessoll and those after at the new one', () => {
+    const { days, balanceSeconds } = deriveRange({
+      startDate: '2026-09-30', // Wednesday, still part time
+      endDate: '2026-10-02', // Friday
+      sessionsByDay: new Map([
+        // 8h work -> required 30m -> net 7h30m, half an hour short of full time.
+        ['2026-10-01', [mkSession('work', 8 * HOUR)]],
+      ]),
+      dayMetaByDay: new Map([['2026-10-02', { date: '2026-10-02', type: 'gleitzeittag', note: '' }]]),
+      dailyTargetSeconds: DEFAULT_DAILY_TARGET_SECONDS, // 5h55m
+      tagessollAb: { '2026-10-01': 8 * HOUR },
+    })
+
+    expect(days.map((d) => d.expectedSeconds)).toEqual([21300, 28800, 28800])
+    // Empty part-time Wednesday, 30m short on Thursday, and a Gleitzeittag
+    // that costs the full-time Tagessoll.
+    expect(days.map((d) => d.deltaSeconds)).toEqual([-21300, -1800, -28800])
+    expect(balanceSeconds).toBe(-51900)
+  })
+})

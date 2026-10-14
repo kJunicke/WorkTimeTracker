@@ -5,6 +5,7 @@
 import type { BackupFile, DayMeta, DayType, Session, SessionKind } from '@/domain/types'
 import type { UrlaubsanspruchSettings } from '@/domain/vacation'
 import { resolveUrlaubsanspruchSettings } from '@/domain/vacation'
+import type { TagessollSettings } from '@/domain/tagessoll'
 
 /** The JSON backup FILE FORMAT version (HANDOFF §6) — independent of the
  *  IndexedDB `SCHEMA_VERSION` in `domain/constants.ts`, even though both
@@ -31,10 +32,11 @@ function toCanonicalDayMeta(m: DayMeta): DayMeta {
  * Urlaubsanspruch figures are hand-typed and cannot be re-derived from
  * anything else in the file, so they always go in — resolved through the
  * domain module, so a settings record predating them still exports a usable
- * figure rather than `undefined`.
+ * figure rather than `undefined`. The same holds for the dated Tagessoll
+ * entries, which always go in as a (possibly empty) map.
  */
 export function buildBackup(args: {
-  settings: { dailyTargetSeconds: number; balanceStartDate: string } & UrlaubsanspruchSettings
+  settings: { balanceStartDate: string } & TagessollSettings & UrlaubsanspruchSettings
   sessions: Session[]
   dayMeta: DayMeta[]
 }): BackupFile {
@@ -47,6 +49,7 @@ export function buildBackup(args: {
       balanceStartDate: args.settings.balanceStartDate,
       urlaubsanspruchStandard: urlaub.urlaubsanspruchStandard,
       urlaubsanspruchByYear: urlaub.urlaubsanspruchByYear,
+      tagessollAb: { ...(args.settings.tagessollAb ?? {}) },
     },
     sessions: args.sessions.map(toCanonicalSession),
     dayMeta: args.dayMeta.map(toCanonicalDayMeta),
@@ -61,6 +64,8 @@ export interface BackupData {
     /** Already defaulted by `parseBackup` — a file predating these fields still yields usable figures. */
     urlaubsanspruchStandard: number
     urlaubsanspruchByYear: Record<string, number>
+    /** Already defaulted to `{}` by `parseBackup` — an older file is a timeline of only the "seit Beginn" value. */
+    tagessollAb: Record<string, number>
   }
   sessions: Session[]
   dayMeta: DayMeta[]
@@ -99,6 +104,13 @@ function isValidDayMeta(value: unknown): value is DayMeta {
 function isValidYearMap(value: unknown): value is Record<string, number> {
   if (!isPlainObject(value)) return false
   return Object.values(value).every((v) => typeof v === 'number')
+}
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
+
+/** Dated Tagessoll entries: a plain object keyed by "YYYY-MM-DD" with number values. */
+function isValidTagessollMap(value: unknown): value is Record<string, number> {
+  return isValidYearMap(value) && Object.keys(value).every((ab) => ISO_DATE.test(ab))
 }
 
 /** Validates every element of an unknown array against a type guard; `null` if any element fails. */
@@ -155,6 +167,13 @@ export function parseBackup(text: string): ParseBackupResult {
     urlaubsanspruchByYear: byYearRaw as Record<string, number> | undefined,
   })
 
+  // Additive since the Tagessoll-Zeitleiste, with the same optional-with-default
+  // reading: an older file simply has no dated entries.
+  const tagessollAbRaw = settingsRaw.tagessollAb
+  if (tagessollAbRaw !== undefined && !isValidTagessollMap(tagessollAbRaw)) {
+    return { ok: false, error: 'Backup enthält kein gültiges Tagessoll.' }
+  }
+
   const sessions = parseArray(parsed.sessions, isValidSession)
   if (!sessions) {
     return { ok: false, error: 'Backup enthält fehlerhafte Sitzungsdaten.' }
@@ -173,6 +192,7 @@ export function parseBackup(text: string): ParseBackupResult {
         balanceStartDate: settingsRaw.balanceStartDate,
         urlaubsanspruchStandard: urlaub.urlaubsanspruchStandard,
         urlaubsanspruchByYear: urlaub.urlaubsanspruchByYear,
+        tagessollAb: tagessollAbRaw ?? {},
       },
       sessions,
       dayMeta,

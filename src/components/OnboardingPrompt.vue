@@ -52,14 +52,14 @@ function onDismiss(): void {
       </button>
     </header>
     <p class="muted">
-      Bevor es losgeht: Tagesziel und Startdatum des Saldos festlegen. Beides lässt sich später
+      Bevor es losgeht: Tagessoll und Startdatum des Saldos festlegen. Beides lässt sich später
       jederzeit in den Einstellungen ändern. Vorhandene Daten kannst du unter „Einstellungen →
       Backup importieren“ einspielen.
     </p>
 
     <div class="field-row">
       <div class="field">
-        <label for="ob-hours">Tagesziel – Std.</label>
+        <label for="ob-hours">Tagessoll – Std.</label>
         <input id="ob-hours" v-model.number="hours" type="number" min="0" max="23" />
       </div>
       <div class="field">

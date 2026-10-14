@@ -55,8 +55,8 @@ export function toStoredDayMeta(meta: DayMeta): DayMeta {
  * anything else on disk, so that failure would be unrecoverable and silent.
  *
  * `reactive()` is DEEP, so the top-level spread is not enough on its own —
- * `urlaubsanspruchByYear` is a Proxy of its own and needs copying too, or
- * structured-clone still throws. Kept `undefined` when absent rather than
+ * `urlaubsanspruchByYear` and `tagessollAb` are Proxies of their own and need
+ * copying too, or structured-clone still throws. Kept `undefined` when absent rather than
  * defaulted to `{}`: the field is optional-with-default on read, and writing
  * an empty map here would claim the user had configured one.
  */
@@ -66,6 +66,7 @@ export function toStoredSettings(settings: Settings): Settings {
     urlaubsanspruchByYear: settings.urlaubsanspruchByYear
       ? { ...settings.urlaubsanspruchByYear }
       : undefined,
+    tagessollAb: settings.tagessollAb ? { ...settings.tagessollAb } : undefined,
   }
 }
 

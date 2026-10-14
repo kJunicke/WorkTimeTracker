@@ -32,9 +32,21 @@ itself: a Feiertag carries the `holiday` label automatically unless the user
 labeled the day otherwise (ADR 0003).
 _Avoid_: Holiday (English, collides with Urlaub), Bank holiday
 
+**Tagessoll** (daily target):
+The contractual working time a weekday carries, taken from the
+Tagessoll-Zeitleiste for that date. Weekends and gutgeschriebene Tage carry
+none.
+_Avoid_: Tagesziel, daily goal, Sollzeit
+
+**Tagessoll-Zeitleiste** (target timeline):
+An undated "seit Beginn" Tagessoll plus entries "ab Datum X", each in force
+until the next one starts. A new entry never changes days before its start
+date (ADR 0004).
+_Avoid_: Abweichungszeitraum, override period
+
 **Gleitzeit** (balance):
-The running sum of every day's surplus or shortfall against the daily target,
-accumulated from the balance start date onward.
+The running sum of every day's surplus or shortfall against the Tagessoll in
+force on that day, accumulated from the balance start date onward.
 _Avoid_: Overtime, flex time, Überstunden
 
 ### Vacation
@@ -67,7 +79,8 @@ _Avoid_: Left, available
 
 **Gleitzeittag** (flex day):
 A day taken off that draws on the Gleitzeit rather than the Urlaubskonto. It is
-not a credited day: it carries the full daily target and so costs its hours
-against the Gleitzeit, to be made up on other days. Distinct from an untracked
-day only by intent — the label says the shortfall was deliberate.
+not a credited day: it carries the full Tagessoll in force that day and so
+costs its hours against the Gleitzeit, to be made up on other days. Distinct
+from an untracked day only by intent — the label says the shortfall was
+deliberate.
 _Avoid_: Overtime day, comp day, unpaid leave, over-drawn vacation

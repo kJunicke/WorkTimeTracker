@@ -4,6 +4,8 @@
 import type { Session, DayMeta, DayType, DayDerivation } from './types'
 import { sessionSeconds, enumerateDays, isWeekend } from './time'
 import { SIX_HOURS, NINE_HOURS, THIRTY_MIN, FORTY_FIVE_MIN } from './constants'
+import { tagessollAm } from './tagessoll'
+import type { TagessollSettings } from './tagessoll'
 
 /**
  * Label wins: vacation/sick/holiday credit the day regardless of logged work
@@ -80,16 +82,18 @@ export function deriveDay(args: {
 /**
  * Derives every day in [startDate..endDate] (inclusive) and sums the balance.
  * Enumerating every day (rather than only days with data) means an empty
- * past weekday with no label automatically counts as full undertime.
+ * past weekday with no label automatically counts as full undertime. Each day
+ * is measured against the Tagessoll in force on it (ADR 0004).
  */
-export function deriveRange(args: {
-  startDate: string
-  endDate: string
-  sessionsByDay: Map<string, Session[]>
-  dayMetaByDay: Map<string, DayMeta>
-  dailyTargetSeconds: number
-}): { days: DayDerivation[]; balanceSeconds: number } {
-  const { startDate, endDate, sessionsByDay, dayMetaByDay, dailyTargetSeconds } = args
+export function deriveRange(
+  args: {
+    startDate: string
+    endDate: string
+    sessionsByDay: Map<string, Session[]>
+    dayMetaByDay: Map<string, DayMeta>
+  } & TagessollSettings,
+): { days: DayDerivation[]; balanceSeconds: number } {
+  const { startDate, endDate, sessionsByDay, dayMetaByDay } = args
 
   const days: DayDerivation[] = []
   let balanceSeconds = 0
@@ -102,7 +106,7 @@ export function deriveRange(args: {
       type,
       isWeekend: isWeekend(date),
       sessions,
-      dailyTargetSeconds,
+      dailyTargetSeconds: tagessollAm(date, args),
     })
     days.push(day)
     balanceSeconds += day.deltaSeconds
