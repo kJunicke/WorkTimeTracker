@@ -15,7 +15,7 @@ const CURRENT_SCHEMA_VERSION = 1
 const SESSION_KINDS = new Set<SessionKind>(['work', 'break'])
 // Widening this set is purely additive — older files simply never contain the
 // newer members — so the file format stays at version 1.
-const DAY_TYPES = new Set<DayType>(['work', 'vacation', 'sick', 'holiday', 'gleitzeittag'])
+const DAY_TYPES = new Set<DayType>(['work', 'vacation', 'sick', 'holiday', 'gleitzeittag', 'pauschal'])
 
 /** Re-shapes to exactly the canonical `Session` fields, dropping any stray extra (e.g. a persisted `dayKey`). */
 function toCanonicalSession(s: Session): Session {

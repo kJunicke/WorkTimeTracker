@@ -37,12 +37,16 @@
   --holiday: #a855f7; /* Feiertag — purple */
   --gleitzeittag: #14b8a6; /* Gleitzeittag — teal; must not read as Urlaub's sky */
   --weekend: #b9bac6; /* weekend — grey */
+  --pauschal: #ec4899; /* Pauschaltag — pink; reads as away-but-working, not as any Abwesenheit */
 
   /* Heatmap ramp (net work vs. target): empty → under → on → over */
   --heat-empty: #f1f2f6;
   --heat-under: #fde3d6;
   --heat-on: #c7d2fe;
   --heat-over: #a7f3d0;
+  /* Weekend with logged work: all of it is Plus, so the over-target green —
+     striped with the weekend grey so it never reads as an ordinary weekday. */
+  --weekend-work: repeating-linear-gradient(135deg, var(--heat-over) 0 7px, var(--weekend) 7px 10px);
 
   /* Radii */
   --radius-sm: 10px;

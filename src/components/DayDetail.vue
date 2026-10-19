@@ -35,6 +35,7 @@ const TYPE_COLOR_VAR: Record<DayType, string> = {
   sick: 'var(--sick)',
   holiday: 'var(--holiday)',
   gleitzeittag: 'var(--gleitzeittag)',
+  pauschal: 'var(--pauschal)',
 }
 
 /**
@@ -83,6 +84,9 @@ const labelIgnoresWork = computed<boolean>(
 
 /** A Gleitzeittag looks like an untracked day in the numbers, so say why it costs a full target (ADR 0001). */
 const isGleitzeittag = computed<boolean>(() => derivation.value.type === 'gleitzeittag')
+
+/** A Pauschaltag shows Soll and Netto both at zero, so say that this means "fully worked" (ADR 0005). */
+const isPauschal = computed<boolean>(() => derivation.value.type === 'pauschal')
 
 /** Non-null while the "kein Urlaub mehr übrig" offer is on screen. */
 const gleitzeittagAngebotOffen = ref(false)
@@ -172,6 +176,7 @@ function onEditDelete(): void {
           <option value="sick">Krank</option>
           <option value="holiday">Feiertag</option>
           <option value="gleitzeittag">Gleitzeittag</option>
+          <option value="pauschal">Pauschal (voller Tag)</option>
         </select>
         <button
           v-if="hasExplicitDayMeta"
@@ -189,7 +194,12 @@ function onEditDelete(): void {
       {{ autoFeiertag }} – gesetzlicher Feiertag in {{ FEIERTAGE_LAND }}, automatisch gekennzeichnet.
       Oben änderbar, falls doch gearbeitet wurde.
     </p>
-    <p v-if="derivation.isWeekend" class="faint hint-note">Wochenende – kein Soll, zählt nicht für den Saldo.</p>
+    <p v-if="derivation.isWeekend && !isLabeledType(derivation.type)" class="faint hint-note">
+      Wochenende – kein Soll. Erfasste Arbeitszeit zählt voll als Plus auf die Gleitzeit.
+    </p>
+    <p v-if="isPauschal && !derivation.isWeekend" class="faint hint-note">
+      Pauschal – gilt als voller Arbeitstag, ohne Zeiten erfassen zu müssen. Kein Plus, kein Minus.
+    </p>
     <p v-if="labelIgnoresWork" class="faint hint-note">
       Kennzeichnung zählt – erfasste Arbeitszeit wird nicht angerechnet.
     </p>

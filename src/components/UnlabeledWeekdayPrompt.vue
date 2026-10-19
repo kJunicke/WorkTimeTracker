@@ -44,6 +44,7 @@ function label(type: DayType): void {
       <button class="btn" @click="label('vacation')">Urlaub</button>
       <button class="btn" @click="label('sick')">Krank</button>
       <button class="btn" @click="label('holiday')">Feiertag</button>
+      <button class="btn" @click="label('pauschal')">Pauschal</button>
       <!-- Spans the row, and is the ONLY way out of this prompt that still
            costs a full day's target. There used to be an "Arbeitstag (leer)"
            button beside it writing `type: 'work'`, but `gleitzeittag` is
@@ -62,11 +63,10 @@ function label(type: DayType): void {
   flex-direction: column;
   gap: 10px;
 }
-/* Three credited labels across the top, Gleitzeittag spanning beneath them —
-   with the fourth button gone, a 2-column grid left a hole in the second row. */
+/* The four credited labels in a 2×2 block, Gleitzeittag spanning beneath them. */
 .actions {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 8px;
 }
 .wide {

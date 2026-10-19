@@ -30,9 +30,10 @@ const SKIP_LABEL_DE: Record<Exclude<DayType, 'work'>, [string, string]> = {
   sick: ['Krank-Tag', 'Krank-Tage'],
   holiday: ['Feiertag', 'Feiertage'],
   gleitzeittag: ['Gleitzeittag', 'Gleitzeittage'],
+  pauschal: ['Pauschaltag', 'Pauschaltage'],
 }
 /** Fixed order so the wording is stable whatever order the plan skipped them in. */
-const SKIP_ORDER: Exclude<DayType, 'work'>[] = ['holiday', 'sick', 'vacation', 'gleitzeittag']
+const SKIP_ORDER: Exclude<DayType, 'work'>[] = ['holiday', 'sick', 'vacation', 'gleitzeittag', 'pauschal']
 
 const spanHeading = computed<string>(() =>
   props.plan.start === props.plan.end

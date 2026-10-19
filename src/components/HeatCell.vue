@@ -12,10 +12,12 @@ export type DayTone =
   | 'on'
   | 'over'
   | 'weekend'
+  | 'weekend-work'
   | 'vacation'
   | 'sick'
   | 'holiday'
   | 'gleitzeittag'
+  | 'pauschal'
   | 'muted'
 </script>
 
@@ -55,6 +57,7 @@ const BADGE_BY_TONE: Partial<Record<DayTone, string>> = {
   sick: 'K',
   holiday: 'F',
   gleitzeittag: 'G',
+  pauschal: 'P',
 }
 const badge = computed<string | undefined>(() => BADGE_BY_TONE[props.tone])
 
@@ -130,6 +133,9 @@ function onClick(): void {
 .tone-weekend {
   background: var(--weekend);
 }
+.tone-weekend-work {
+  background: var(--weekend-work);
+}
 .tone-vacation {
   background: var(--vacation);
 }
@@ -141,6 +147,9 @@ function onClick(): void {
 }
 .tone-gleitzeittag {
   background: var(--gleitzeittag);
+}
+.tone-pauschal {
+  background: var(--pauschal);
 }
 .tone-muted {
   background: transparent;

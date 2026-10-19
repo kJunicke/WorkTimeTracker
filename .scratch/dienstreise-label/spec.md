@@ -1,6 +1,6 @@
 # Dienstreise — a work-trip day label
 
-Status: needs-triage
+Status: done
 
 ## Problem
 
@@ -26,3 +26,12 @@ A fifth `DayType`, `worktrip`.
 ## Origin
 
 Raised during the `urlaubskonto` grilling session.
+
+## Comments
+
+Resolved as the broader `pauschal` label (Pauschaltag), which also covers
+company celebrations and other days that cannot be clocked. It is a credited
+day: no Tagessoll, logged sessions ignored, no Urlaubstag spent. The break-rule
+question falls away because nothing is derived from sessions on such a day.
+Backup compatibility follows the `gleitzeittag` precedent: an additive widening
+that stays at version 1. See ADR 0005.

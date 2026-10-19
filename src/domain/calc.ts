@@ -8,8 +8,10 @@ import { tagessollAm } from './tagessoll'
 import type { TagessollSettings } from './tagessoll'
 
 /**
- * Label wins: vacation/sick/holiday credit the day regardless of logged work
- * (HANDOFF §3.5) — the gutgeschriebene Tage.
+ * Label wins: vacation/sick/holiday/pauschal credit the day regardless of
+ * logged work (HANDOFF §3.5) — the gutgeschriebene Tage. A `pauschal` day was
+ * worked away from the clock (ADR 0005): neutral like the others, it simply
+ * never draws on the Urlaubskonto, which counts `vacation` alone.
  *
  * `gleitzeittag` is deliberately NOT in this set (ADR 0001): that single
  * omission is what makes it derive exactly like an ordinary work day — full
@@ -18,7 +20,7 @@ import type { TagessollSettings } from './tagessoll'
  * re-listing the members.
  */
 export function isLabeledType(type: DayType): boolean {
-  return type === 'vacation' || type === 'sick' || type === 'holiday'
+  return type === 'vacation' || type === 'sick' || type === 'holiday' || type === 'pauschal'
 }
 
 /** German legal break (§4 ArbZG) required for a given gross work total. */

@@ -104,8 +104,8 @@ describe('deriveDay — break law + net/expected/delta', () => {
     expect(result.deltaSeconds).toBe(0)
   })
 
-  describe('labeled days (vacation/sick/holiday) — label wins over any logged work', () => {
-    const labeledTypes: DayType[] = ['vacation', 'sick', 'holiday']
+  describe('labeled days (vacation/sick/holiday/pauschal) — label wins over any logged work', () => {
+    const labeledTypes: DayType[] = ['vacation', 'sick', 'holiday', 'pauschal']
     for (const type of labeledTypes) {
       it(`${type}: net = 0, expected = 0, delta = 0, autoDeducted = 0, even with 8h logged work`, () => {
         const result = deriveDay({
@@ -281,6 +281,30 @@ describe('deriveRange — enumerates every day, sums the balance', () => {
     const expectedBalance = -dailyTargetSeconds + 0 + 1800 + 0 + 0 + -dailyTargetSeconds
     expect(balanceSeconds).toBe(expectedBalance)
     expect(balanceSeconds).toBe(-34200)
+  })
+
+  it('weekend work lands in the balance as Plus; a Pauschaltag clears a weekday it logged nothing on', () => {
+    const dailyTargetSeconds = 18000 // 5h
+
+    const { days, balanceSeconds } = deriveRange({
+      startDate: '2026-05-08', // Friday
+      endDate: '2026-05-11', // Monday
+      sessionsByDay: new Map([
+        // Saturday: 4h work, below the break threshold -> net 4h, all of it Plus.
+        ['2026-05-09', [mkSession('work', 4 * HOUR)]],
+      ]),
+      dayMetaByDay: new Map<string, DayMeta>([
+        // Friday on a Dienstreise, nothing logged; Monday left untracked.
+        ['2026-05-08', { date: '2026-05-08', type: 'pauschal', note: 'Dienstreise' }],
+      ]),
+      dailyTargetSeconds,
+    })
+
+    expect(days.find((d) => d.date === '2026-05-08')!.deltaSeconds).toBe(0)
+    expect(days.find((d) => d.date === '2026-05-09')!.deltaSeconds).toBe(4 * HOUR)
+    expect(days.find((d) => d.date === '2026-05-10')!.deltaSeconds).toBe(0)
+    expect(days.find((d) => d.date === '2026-05-11')!.deltaSeconds).toBe(-dailyTargetSeconds)
+    expect(balanceSeconds).toBe(4 * HOUR - dailyTargetSeconds)
   })
 })
 

@@ -16,11 +16,12 @@ One local calendar day, the unit everything is derived and displayed per.
 
 **Tageskennzeichnung** (day label):
 The single, mutually exclusive label a day carries: `work`, `vacation`, `sick`,
-`holiday` or `gleitzeittag`. Absence means an ordinary work day.
+`holiday`, `gleitzeittag` or `pauschal`. Absence means an ordinary work day.
 _Avoid_: Day status, day flag, marker
 
 **Gutgeschriebener Tag** (credited day):
-A day whose label makes it fully neutral — `vacation`, `sick` and `holiday`.
+A day whose label makes it fully neutral — `vacation`, `sick`, `holiday` and
+`pauschal`.
 It neither carries a target nor contributes to the Gleitzeit, whatever is
 logged on it. A Gleitzeittag is explicitly not one of these.
 _Avoid_: Labeled day, off day
@@ -31,6 +32,13 @@ gesetzlicher Feiertag. It is a gutgeschriebener Tag, and the app knows the list
 itself: a Feiertag carries the `holiday` label automatically unless the user
 labeled the day otherwise (ADR 0003).
 _Avoid_: Holiday (English, collides with Urlaub), Bank holiday
+
+**Pauschaltag** (flat-rate day):
+A day worked away from the clock, such as a Dienstreise or a company
+celebration, that counts as a full working day without any sessions logged. It
+is a gutgeschriebener Tag, and unlike Urlaub it costs nothing from the
+Urlaubskonto (ADR 0005).
+_Avoid_: Dienstreise-Tag (too narrow), worktrip, Pauschale
 
 **Tagessoll** (daily target):
 The contractual working time a weekday carries, taken from the

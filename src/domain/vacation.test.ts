@@ -187,7 +187,7 @@ describe('deriveUrlaubskonto — what does and does not consume the Urlaubsanspr
   describe('only `vacation` counts — every other label counts for nothing', () => {
     // `gleitzeittag` is deliberately absent from the Urlaubskonto (ADR 0001):
     // its cost already shows up in the Gleitzeit balance.
-    const otherTypes: DayType[] = ['work', 'sick', 'holiday', 'gleitzeittag']
+    const otherTypes: DayType[] = ['work', 'sick', 'holiday', 'gleitzeittag', 'pauschal']
     for (const type of otherTypes) {
       it(`${type} consumes nothing, before or after today`, () => {
         const konto = deriveUrlaubskonto({
@@ -398,7 +398,7 @@ describe('planUrlaubSpan — a day inside the span that already carries a label'
   })
 
   describe('every non-work label is skipped and keeps what it has', () => {
-    const labels: Exclude<DayType, 'work'>[] = ['vacation', 'sick', 'holiday', 'gleitzeittag']
+    const labels: Exclude<DayType, 'work'>[] = ['vacation', 'sick', 'holiday', 'gleitzeittag', 'pauschal']
     for (const type of labels) {
       it(`${type} is skipped and costs nothing`, () => {
         const plan = planUrlaubSpan({
@@ -660,7 +660,7 @@ describe('planTageskennzeichnung — the Urlaubsanspruch caps single days too', 
   }
 
   describe('every label other than Urlaub is unaffected by the Urlaubskonto', () => {
-    const others: DayType[] = ['work', 'sick', 'holiday', 'gleitzeittag']
+    const others: DayType[] = ['work', 'sick', 'holiday', 'gleitzeittag', 'pauschal']
     for (const type of others) {
       it(`${type} is labeled even with nothing übrig`, () => {
         for (const date of [WEEKDAY, WEEKEND]) {

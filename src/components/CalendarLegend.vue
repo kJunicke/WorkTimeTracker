@@ -13,7 +13,9 @@ const entries = [
   // Spelled out: the whole point of the label is that it costs Gleitzeit,
   // which the colour alone can't say.
   { tone: 'gleitzeittag', label: 'Gleitzeittag (von der Gleitzeit)' },
+  { tone: 'pauschal', label: 'Pauschal (voller Arbeitstag)' },
   { tone: 'weekend', label: 'Wochenende' },
+  { tone: 'weekend-work', label: 'Wochenende mit Arbeit (alles Plus)' },
 ] as const
 </script>
 
@@ -77,6 +79,9 @@ const entries = [
 .tone-weekend {
   background: var(--weekend);
 }
+.tone-weekend-work {
+  background: var(--weekend-work);
+}
 .tone-vacation {
   background: var(--vacation);
 }
@@ -88,5 +93,8 @@ const entries = [
 }
 .tone-gleitzeittag {
   background: var(--gleitzeittag);
+}
+.tone-pauschal {
+  background: var(--pauschal);
 }
 </style>

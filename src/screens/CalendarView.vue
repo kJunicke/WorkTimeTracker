@@ -41,6 +41,7 @@ const DAY_TYPE_LABEL_DE: Record<Exclude<DayType, 'work'>, string> = {
   sick: 'Krank',
   holiday: 'Feiertag',
   gleitzeittag: 'Gleitzeittag',
+  pauschal: 'Pauschal',
 }
 const WEEKDAY_LABELS = ['Mo', 'Di', 'Mi', 'Do', 'Fr', 'Sa', 'So'] as const
 
@@ -76,8 +77,9 @@ function goToday(): void {
  * [balanceStartDate..today] (incl. future) are muted; then any explicit
  * non-work label wins (the user set it deliberately — respect it even in the
  * rare case of a labeled weekend, and for a Gleitzeittag even when work was
- * logged on it); then weekend styling; then the heat ramp (empty → under →
- * on-target → over) for an ordinary work day.
+ * logged on it); then weekend styling — striped green once anything was
+ * worked, since every minute of it is Plus; then the heat ramp (empty →
+ * under → on-target → over) for an ordinary work day.
  */
 function toneFor(date: string): DayTone {
   const derivation = store.derivedDays.value.get(date)
@@ -90,9 +92,9 @@ function toneFor(date: string): DayTone {
   const start = store.settings.value.balanceStartDate
   if (date < start || date > today.value) return 'muted'
 
-  if (isWeekend(date)) return 'weekend'
-
   const net = derivation?.netWorkSeconds ?? 0
+  if (isWeekend(date)) return net > 0 ? 'weekend-work' : 'weekend'
+
   const target = derivation?.expectedSeconds ?? 0
   if (net === 0) return 'empty'
   if (net < target) return 'under'
@@ -112,6 +114,7 @@ function titleFor(date: string, tone: DayTone): string {
     return `${heading} · ${DAY_TYPE_LABEL_DE[type]} · ${formatDuration(derivation.netWorkSeconds)} von ${formatDuration(derivation.expectedSeconds)}`
   }
   if (tone === 'muted' || !derivation) return heading
+  if (tone === 'weekend-work') return `${heading} · Wochenende · ${formatDuration(derivation.netWorkSeconds)} gearbeitet, alles Plus`
   return `${heading} · ${formatDuration(derivation.netWorkSeconds)} von ${formatDuration(derivation.expectedSeconds)}`
 }
 
