@@ -2,6 +2,8 @@
 
 Status: done — see each issue's Comments section
 
+2026-11-17: the one open ticket, 05, moved to mastermind's tracker as S044 (`task-tracker/scratch/`); everything left here is closed and frozen.
+
 ## Problem Statement
 
 The app already knows which days are vacation — `vacation` is one of the day
